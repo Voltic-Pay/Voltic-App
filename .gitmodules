@@ -1,0 +1,3 @@
+[submodule "app/src/main/java/com/voltic/contracts/lib/openzeppelin-contracts"]
+	path = app/src/main/java/com/voltic/contracts/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts

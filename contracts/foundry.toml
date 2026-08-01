@@ -1,0 +1,18 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+script = "script"
+solc_version = "0.8.24"
+# Turn on the optimizer to save gas for your users!
+optimizer = true
+optimizer_runs = 200
+
+# Map the RPC URL from your .env file
+[rpc_endpoints]
+arbitrum_sepolia = "${RPC_URL}"
+
+# Map the Arbiscan API Key for contract verification
+[etherscan]
+arbitrum_sepolia = { key = "${ARBISCAN_API_KEY}" }

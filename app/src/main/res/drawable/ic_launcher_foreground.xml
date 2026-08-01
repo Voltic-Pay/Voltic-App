@@ -1,0 +1,35 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Centered within the 66x66 safe zone -->
+    <group
+        android:translateX="54"
+        android:translateY="54">
+        <!-- Top Left Facet -->
+        <path
+            android:fillColor="#FFB800"
+            android:pathData="M 0,-30 L -18,0 L 0,-5 Z" />
+        <!-- Top Right Facet -->
+        <path
+            android:fillColor="#050505"
+            android:pathData="M 0,-30 L 18,0 L 0,0 Z " />
+        <!-- Shock / Voltage Cut Line (Upper) -->
+        <path
+            android:fillColor="#FFB800"
+            android:pathData="M -18,0 L 6,0 L 18,0 L 0,-6 Z" />
+        <!-- Bottom Left Facet -->
+        <path
+            android:fillColor="#050505"
+            android:pathData="M -18,3 L 0,9 L 0,28 Z" />
+        <!-- Bottom Right Facet -->
+        <path
+            android:fillColor="#E5A400"
+            android:pathData="M 0,5 L 18,0 L 0,28 Z" />
+        <!-- Shock / Voltage Cut Line (Lower) -->
+        <path
+            android:fillColor="#FFB800"
+            android:pathData="M -18,0 L 6,0 L 18,0 L 0,6 Z" />
+    </group>
+</vector>

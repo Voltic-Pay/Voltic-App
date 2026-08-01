@@ -1,0 +1,17 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+/.artifacts
+/app/src/main/java/com/voltic/contracts/.env
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
