@@ -29,7 +29,7 @@ We are just getting started. Our roadmap includes:
 
 1.  **Enhanced Device Integration:** Better account management and multi-device synchronization
 2.  **Wearable Hardware:** We are actively working on porting the core Voltic logic to small **ESP32-C3** microcontrollers. With a tiny battery, Voltic could fit into a ring, a watch, or any wearable form factor.
-3.  ** Per Device spending limits based on ERC-4773 with One smart account with multiple authorized keys ** 
+3.  **Per Device spending limits based**  on ERC-4773 with One smart account with multiple authorized keys
 
 ---
 
@@ -42,13 +42,13 @@ create a wallet save the seed phrase
 go to https://github.com/Voltic-Pay/Voltic-App/edit or other etherum faucent networks get some eth set you account public adresss -copy it from app dashboard-
 go to meta mask install it click resote a wallet put the seed phrase
 go to https://portal.arbitrum.io/bridge connect your metamask then bride to eth arbitrum 
-** this is only for testnet**
+**this is only for testnet**
 
 ### for real payments with real moeny
 you can use any swap sites like uni swap choose eth arbitrum choose it set you public address and pay 
 then you can open the app and you will see your funds 
-** until now this app is only on testnet for testing until it achieve a rock solid stability then i will make a real network release **
-** as above you can test that on your own -don't do it if you are not a developer-** 
+**until now this app is only on testnet for testing until it achieve a rock solid stability then i will make a real network release**
+**as above you can test that on your own** -don't do it if you are not a developer-
 
 ### Prerequisites
 
@@ -84,6 +84,4 @@ then you can open the app and you will see your funds
 5. **(optional) Deply your own contract)
     If you want to see how to deploy you own custom contract ,see the README.md in /contracts 
 
-## License
 
-Copyright © 2026 Voltic Pay. All rights reserved.
