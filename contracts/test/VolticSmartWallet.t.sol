@@ -87,7 +87,7 @@ contract VolticSmartWalletTest is Test {
         vault.setSpendLimit(VolticSmartWallet.LimitPeriod.Daily, 1 ether);
 
         bytes memory sig3 = _signVaultPayment(alicePk, alice, merchant, 0.6 ether, nonce, deadline);
-        vault.executePayment(alice, merchant, 0.6 ether, nonce, deadline, sig1);
+        vault.executePayment(alice, merchant, 0.6 ether, nonce, deadline, sig3);
     }
 
     function test_LimitResetsAfterTime() public {

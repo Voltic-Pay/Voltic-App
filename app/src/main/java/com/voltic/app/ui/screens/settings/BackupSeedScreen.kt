@@ -5,44 +5,20 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeTopAppBar
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import com.voltic.app.R
@@ -99,8 +75,6 @@ fun BackupSeedScreen(
                 biometricPrompt.authenticate(promptInfo)
             }
             else -> {
-                // Device doesn't have biometrics/pin set up or not compatible
-                // In a real app, you might show an alternative or warning.
                 isAuthenticated = true
                 mnemonic = walletManager.getMnemonicForBackupAsync()
             }
@@ -130,7 +104,7 @@ fun BackupSeedScreen(
             ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 1f))
             ) {
                 Row(
                     modifier = Modifier.padding(20.dp),
@@ -180,31 +154,29 @@ fun BackupSeedScreen(
                 mnemonic?.let { phrase ->
                     val words = phrase.split(" ")
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        words.chunked(3).forEachIndexed { rowIndex, rowWords ->
+                        words.chunked(2).forEachIndexed { rowIndex, rowWords ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 rowWords.forEachIndexed { colIndex, word ->
-                                    val index = rowIndex * 3 + colIndex + 1
+                                    val index = rowIndex * 2 + colIndex + 1
                                     SeedWordCard(
                                         index = index,
                                         word = word,
                                         modifier = Modifier.weight(1f)
                                     )
                                 }
-                                // Fill remaining space if last row has < 3 words
-                                repeat(3 - rowWords.size) {
+                                repeat(2 - rowWords.size) {
                                     Spacer(modifier = Modifier.weight(1f))
                                 }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
 
                     Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 1f),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -233,25 +205,34 @@ fun SeedWordCard(
     word: String,
     modifier: Modifier = Modifier
 ) {
+    // Converts dp to sp using device density. Ignores system font size settings.
+    val fixedIndexSize = with(LocalDensity.current) { 12.dp.toSp() }
+    val fixedWordSize = with(LocalDensity.current) { 15.dp.toSp() }
+
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
                 text = index.toString(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                fontSize = fixedIndexSize,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                maxLines = 1,textAlign = TextAlign.Center
             )
             Text(
                 text = word,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
+                fontSize = fixedWordSize,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Visible ,
+
             )
         }
     }

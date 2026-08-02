@@ -2,16 +2,12 @@ package com.voltic.app.ui.screens.main
 
 import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,10 +40,8 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -65,19 +59,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.voltic.app.R
 import com.voltic.app.chain.ArbitrumClient
 import com.voltic.app.chain.explorer.ExplorerClient
@@ -95,10 +82,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.math.BigDecimal
-
 
 enum class DashboardAction { NONE, SEND_MANUAL }
+
+// Single source of truth for the Send-panel motion timing. Deterministic
+// tween durations (not spring()) on purpose: spring() approaches its target
+// asymptotically and never mathematically "arrives," so Compose has to
+// force-snap the last bit once a completion threshold is hit. That produces
+// a visible "settle, pause, snap" artifact on close. tween has a fixed,
+// predictable finish frame, so there's nothing left to snap.
+private const val SEND_PANEL_ENTER_DURATION_MS = 220
+private const val SEND_PANEL_EXIT_DURATION_MS = 180
+private val SEND_PANEL_ELEVATION_EXPANDED = 8.dp
+private val SEND_PANEL_ELEVATION_COLLAPSED = 0.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -115,6 +111,7 @@ fun DashboardScreen(
     val chain = remember { ArbitrumClient() }
     val explorer = remember { ExplorerClient() }
 
+    var limitInfo by remember { mutableStateOf<ArbitrumClient.SpendLimitInfo?>(null) }
     var address by remember { mutableStateOf<String?>(null) }
     var balanceState by remember { mutableStateOf<BalanceUiState>(BalanceUiState.Loading) }
     var transactions by remember { mutableStateOf<List<TransactionRecord>>(emptyList()) }
@@ -151,7 +148,6 @@ fun DashboardScreen(
                 val ethDecimal = weiBigInt.toBigDecimal().scaleByPowerOfTen(-18)
                 balanceState = BalanceUiState.Success(ethDecimal, price)
                 transactions = history
-
             } catch (_: Exception) {
                 if (balanceState !is BalanceUiState.Success) balanceState = BalanceUiState.Error("Network error")
             } finally {
@@ -166,6 +162,7 @@ fun DashboardScreen(
         if (credentials != null) {
             address = credentials.address
             refreshData(credentials.address, showSkeleton = true)
+            limitInfo = chain.getSpendLimitInfo(credentials.address)
         } else {
             balanceState = BalanceUiState.Error("No active wallet found")
             isInitialLoading = false
@@ -230,7 +227,11 @@ fun DashboardScreen(
                 modifier = Modifier.fillMaxSize().padding(padding)
             ) {
                 Column(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp).imePadding().verticalScroll(rememberScrollState()),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 24.dp)
+                        .imePadding()
+                        .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.Start,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -242,12 +243,12 @@ fun DashboardScreen(
                             label = "Wallet Balance",
                             state = balanceState,
                             isVisible = isBalanceVisible,
-                            onToggleVisibility = { 
+                            onToggleVisibility = {
                                 isBalanceVisible = !isBalanceVisible
                                 walletManager.setBalanceHidden(!isBalanceVisible)
                             }
                         )
-                        
+
                         // Address Chip
                         address?.let { currentAddr ->
                             Surface(
@@ -260,7 +261,11 @@ fun DashboardScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    val shortAddr = if (currentAddr.length > 13) "${currentAddr.take(8)}...${currentAddr.takeLast(5)}" else currentAddr
+                                    val shortAddr = if (currentAddr.length > 13) {
+                                        "${currentAddr.take(8)}...${currentAddr.takeLast(5)}"
+                                    } else {
+                                        currentAddr
+                                    }
                                     Text(
                                         text = shortAddr,
                                         style = MaterialTheme.typography.labelMedium,
@@ -285,7 +290,13 @@ fun DashboardScreen(
                             icon = painterResource(id = R.drawable.ic_send),
                             isSelected = activeAction == DashboardAction.SEND_MANUAL,
                             showDropdown = true,
-                            onClick = { activeAction = if (activeAction == DashboardAction.SEND_MANUAL) DashboardAction.NONE else DashboardAction.SEND_MANUAL }
+                            onClick = {
+                                activeAction = if (activeAction == DashboardAction.SEND_MANUAL) {
+                                    DashboardAction.NONE
+                                } else {
+                                    DashboardAction.SEND_MANUAL
+                                }
+                            }
                         )
 
                         ActionButton(
@@ -297,103 +308,45 @@ fun DashboardScreen(
                     }
 
                     // 3. SEND TRANSACTION PANEL
-                    AnimatedVisibility(
+                    SendPanel(
                         visible = activeAction == DashboardAction.SEND_MANUAL,
-                        enter = fadeIn(animationSpec = tween(220)) +
-                                expandVertically(animationSpec = tween(220), expandFrom = Alignment.Top),
-                        exit = fadeOut(animationSpec = tween(180)) +
-                                shrinkVertically(animationSpec = tween(180), shrinkTowards = Alignment.Top)                    ) {
-                        ElevatedCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 24.dp),
-                            shape = RoundedCornerShape(32.dp),
-                            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                verticalArrangement = Arrangement.spacedBy(20.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text("Send ETH", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-
-                                    Surface(
-                                        onClick = onNavigateToScanQr,
-                                        modifier = Modifier.size(width = 80.dp, height = 56.dp),
-                                        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 24.dp, bottomEnd = 12.dp, bottomStart = 12.dp),
-                                        color = MaterialTheme.colorScheme.primary
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(painter = painterResource(id = R.drawable.ic_scan), contentDescription = "Scan QR", modifier = Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onPrimary)
-                                        }
+                        amountInput = amountInput,
+                        onAmountChange = { newValue ->
+                            amountInput = AmountInputSanitizer.sanitizeCryptoAmount(input = newValue, fallback = amountInput)
+                            sendTxResult = null
+                        },
+                        recipientInput = recipientInput,
+                        onRecipientChange = {
+                            recipientInput = it
+                            sendTxResult = null
+                        },
+                        isSendingTx = isSendingTx,
+                        sendTxResult = sendTxResult,
+                        onScanQrClick = onNavigateToScanQr,
+                        onConfirmSend = {
+                            scope.launch {
+                                isSendingTx = true
+                                sendTxResult = null
+                                try {
+                                    if (!AmountInputSanitizer.isGreaterThanZero(amountInput)) {
+                                        throw IllegalArgumentException("Please enter an amount more than 0")
                                     }
-                                }
-
-                                OutlinedTextField(
-                                    value = amountInput,
-                                    onValueChange = { newValue ->
-                                        amountInput = AmountInputSanitizer.sanitizeCryptoAmount(input = newValue, fallback = amountInput)
-                                        sendTxResult = null
-                                    },
-                                    label = { Text("Amount (ETH)") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                    shape = RoundedCornerShape(16.dp)
-                                )
-
-                                OutlinedTextField(
-                                    value = recipientInput,
-                                    onValueChange = { recipientInput = it; sendTxResult = null },
-                                    label = { Text("Recipient Address or ENS") },
-                                    placeholder = { Text("0x... or name.eth") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(16.dp)
-                                )
-
-                                Button(
-                                    onClick = {
-                                        scope.launch {
-                                            isSendingTx = true
-                                            sendTxResult = null
-                                            try {
-                                                if (!AmountInputSanitizer.isGreaterThanZero(amountInput)) {
-                                                    throw IllegalArgumentException("Please enter an amount more than 0")
-                                                }
-                                                val credentials = walletManager.loadExistingWalletAsync() ?: throw IllegalStateException("No active wallet loaded")
-                                                val txHash = withContext(Dispatchers.IO) { chain.sendEth(credentials, recipientInput.trim(), amountInput.trim()) }
-                                                sendTxResult = "Success! Tx: $txHash"
-                                                address?.let { refreshData(it) }
-                                            } catch (e: Exception) {
-                                                Log.e("DashboardScreen", "Send ETH failed", e)
-                                                sendTxResult = "Send Failed: ${e.message}"
-                                            } finally {
-                                                isSendingTx = false
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(16.dp),
-                                    enabled = !isSendingTx && recipientInput.isNotBlank() && amountInput.isNotBlank()
-                                ) {
-                                    if (isSendingTx) {
-                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 3.dp)
-                                    } else {
-                                        Text("Confirm & Send", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    val credentials = walletManager.loadExistingWalletAsync()
+                                        ?: throw IllegalStateException("No active wallet loaded")
+                                    val txHash = withContext(Dispatchers.IO) {
+                                        chain.sendEth(credentials, recipientInput.trim(), amountInput.trim())
                                     }
+                                    sendTxResult = "Success! Tx: $txHash"
+                                    address?.let { refreshData(it) }
+                                } catch (e: Exception) {
+                                    Log.e("DashboardScreen", "Send ETH failed", e)
+                                    sendTxResult = "Send Failed: ${e.message}"
+                                } finally {
+                                    isSendingTx = false
                                 }
-                                sendTxResult?.let { StatusBanner(message = it) }
                             }
                         }
-                    }
-
-                    Spacer(modifier = Modifier.height(2.dp))
+                    )
 
                     // 4. RECENT ACTIVITY
                     Text("Recent Activity", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -410,13 +363,131 @@ fun DashboardScreen(
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 transactions.take(4).forEachIndexed { index, tx ->
                                     TransactionItem(transaction = tx, currentAddress = address ?: "")
-                                    if (index != 3 && index != transactions.size - 1) HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp))
+                                    if (index != 3 && index != transactions.size - 1) {
+                                        HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp))
+                                    }
                                 }
                             }
                         }
                     }
                     Spacer(modifier = Modifier.height(32.dp))
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The collapsible "Send ETH" panel.
+ *
+ * Motion notes (why this looks different from a naive AnimatedVisibility +
+ * ElevatedCard):
+ * - Uses tween(), not spring(), for both fade and size — deterministic finish,
+ *   no asymptotic "settle then snap."
+ * - Elevation is NOT a static Card property here; it's animated in lockstep
+ *   with visibility via animateDpAsState, starting at 0dp. A plain
+ *   ElevatedCard's shadow otherwise renders at full strength the instant the
+ *   Card enters composition, ahead of the fade/expand still animating around
+ *   it, which reads as the shadow "popping in" first.
+ */
+@Composable
+private fun SendPanel(
+    visible: Boolean,
+    amountInput: String,
+    onAmountChange: (String) -> Unit,
+    recipientInput: String,
+    onRecipientChange: (String) -> Unit,
+    isSendingTx: Boolean,
+    sendTxResult: String?,
+    onScanQrClick: () -> Unit,
+    onConfirmSend: () -> Unit
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(animationSpec = tween(SEND_PANEL_ENTER_DURATION_MS)) +
+                expandVertically(animationSpec = tween(SEND_PANEL_ENTER_DURATION_MS), expandFrom = Alignment.Top),
+        exit = fadeOut(animationSpec = tween(SEND_PANEL_EXIT_DURATION_MS)) +
+                shrinkVertically(animationSpec = tween(SEND_PANEL_EXIT_DURATION_MS), shrinkTowards = Alignment.Top)
+    ) {
+        val cardElevation by animateDpAsState(
+            targetValue = if (visible) SEND_PANEL_ELEVATION_EXPANDED else SEND_PANEL_ELEVATION_COLLAPSED,
+            animationSpec = tween(SEND_PANEL_ENTER_DURATION_MS),
+            label = "sendPanelElevation"
+        )
+
+        ElevatedCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 24.dp),
+            shape = RoundedCornerShape(32.dp),
+            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            elevation = CardDefaults.elevatedCardElevation(defaultElevation = cardElevation)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Send ETH", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+
+                    Surface(
+                        onClick = onScanQrClick,
+                        modifier = Modifier.size(width = 80.dp, height = 56.dp),
+                        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 24.dp, bottomEnd = 12.dp, bottomStart = 12.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_scan),
+                                contentDescription = "Scan QR",
+                                modifier = Modifier.size(28.dp),
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = amountInput,
+                    onValueChange = onAmountChange,
+                    label = { Text("Amount (ETH)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    shape = RoundedCornerShape(16.dp)
+                )
+
+                OutlinedTextField(
+                    value = recipientInput,
+                    onValueChange = onRecipientChange,
+                    label = { Text("Recipient Address or ENS") },
+                    placeholder = { Text("0x... or name.eth") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp)
+                )
+
+                Button(
+                    onClick = onConfirmSend,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    enabled = !isSendingTx && recipientInput.isNotBlank() && amountInput.isNotBlank()
+                ) {
+                    if (isSendingTx) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 3.dp
+                        )
+                    } else {
+                        Text("Confirm & Send", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+                sendTxResult?.let { result -> StatusBanner(message = result) }
             }
         }
     }

@@ -10,7 +10,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
+import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -33,6 +36,29 @@ import com.voltic.app.wallet.WalletManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+// ─────────────────────────────────────────────────────────────────────────
+// NAV RACE GUARD
+// Kept in this same file (not a separate file) on purpose, for easy rollback.
+// Problem: NavController.navigate() / popBackStack() fire unconditionally on
+// every tap. If a second nav event arrives while the first transition is
+// still resolving (very easy to trigger with a fast double-tap, e.g. right
+// as a skeleton finishes loading), you can land on a transient, unattached
+// state -> blank screen.
+// Fix: only allow a nav action when the current back stack entry is fully
+// RESUMED, i.e. no transition is in flight. If it isn't, the tap is simply
+// dropped instead of colliding with the in-progress transition.
+// ─────────────────────────────────────────────────────────────────────────
+private fun NavController.navigateSafely(route: String, builder: NavOptionsBuilder.() -> Unit = {}) {
+    if (currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED) {
+        navigate(route, builder)
+    }
+}
+
+private fun NavController.popBackStackSafely() {
+    if (currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED) {
+        popBackStack()
+    }
+}
 
 @Composable
 fun VolticApp(
@@ -83,12 +109,27 @@ fun VolticApp(
             }
 
             // Case 2: NFC service pushed a request
+            // NOTE: NfcSession.pendingRequest re-emits when the customer fills in an
+            // amount mid-session (see NfcSession.updateAmount), not just when a brand
+            // new tap starts a session. We only want to *navigate* on the first,
+            // genuinely-new request (null -> request). A later re-emission for the
+            // same in-progress session should just refresh the already-visible
+            // screen's data, not push a second ConfirmPayment on top of it.
             val incomingNfcRequest by NfcSession.pendingRequest.collectAsStateWithLifecycle()
+            var lastHandledNfcRequest by remember { mutableStateOf<com.voltic.app.payload.NFCPaymentRequest?>(null) }
             LaunchedEffect(incomingNfcRequest) {
-                incomingNfcRequest?.let { request ->
+                val request = incomingNfcRequest
+                if (request != null) {
                     pendingPaymentRequest = request
-                    navController.navigate(Screen.ConfirmPayment.route)
+                    if (lastHandledNfcRequest == null) {
+                        // genuinely new session -> navigate
+                        navController.navigate(Screen.ConfirmPayment.route) {
+                            launchSingleTop = true
+                        }
+                    }
+                    // else: same session, amount/flags updated -> data update only, no nav
                 }
+                lastHandledNfcRequest = request
             }
 
             NavHost(
@@ -97,8 +138,8 @@ fun VolticApp(
             ) {
                 composable(Screen.Welcome.route) {
                     WelcomeScreen(
-                        onCreateNew = { navController.navigate(Screen.CreateWallet.route) },
-                        onRestore = { navController.navigate(Screen.RestoreWallet.route) }
+                        onCreateNew = { navController.navigateSafely(Screen.CreateWallet.route) },
+                        onRestore = { navController.navigateSafely(Screen.RestoreWallet.route) }
                     )
                 }
 
@@ -106,7 +147,7 @@ fun VolticApp(
                     CreateWalletScreen(
                         walletManager = walletManager,
                         onWalletCreated = {
-                            navController.navigate(Screen.Dashboard.route) {
+                            navController.navigateSafely(Screen.Dashboard.route) {
                                 popUpTo(0) { inclusive = true }
                             }
                         }
@@ -117,23 +158,23 @@ fun VolticApp(
                     RestoreWalletScreen(
                         walletManager = walletManager,
                         onWalletRestored = {
-                            navController.navigate(Screen.Dashboard.route) {
+                            navController.navigateSafely(Screen.Dashboard.route) {
                                 popUpTo(0) { inclusive = true }
                             }
                         },
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStackSafely() }
                     )
                 }
 
                 composable(Screen.Dashboard.route) {
                     DashboardScreen(
                         walletManager = walletManager,
-                        onSwitchWallet = { navController.navigate(Screen.RestoreWallet.route) },
-                        onNavigateToScanQr = { navController.navigate(Screen.ScanQr.route) },
-                        onNavigateToGenerateQr = { navController.navigate(Screen.GenerateQr.route) },
-                        onNavigateToHistory = { navController.navigate(Screen.TransactionHistory.route) },
-                        onNavigateToBackupSeed = { navController.navigate(Screen.BackupSeed.route) },
-                        onNavigateToLimits = { navController.navigate(Screen.SpendLimit.route) }
+                        onSwitchWallet = { navController.navigateSafely(Screen.RestoreWallet.route) },
+                        onNavigateToScanQr = { navController.navigateSafely(Screen.ScanQr.route) },
+                        onNavigateToGenerateQr = { navController.navigateSafely(Screen.GenerateQr.route) },
+                        onNavigateToHistory = { navController.navigateSafely(Screen.TransactionHistory.route) },
+                        onNavigateToBackupSeed = { navController.navigateSafely(Screen.BackupSeed.route) },
+                        onNavigateToLimits = { navController.navigateSafely(Screen.SpendLimit.route) }
 
                     )
                 }
@@ -141,19 +182,19 @@ fun VolticApp(
                 composable(Screen.BackupSeed.route) {
                     BackupSeedScreen(
                         walletManager = walletManager,
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStackSafely() }
                     )
                 }
 
                 composable(Screen.SpendLimit.route) {
                     SpendLimitScreen(
                         walletManager = walletManager,
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStackSafely() }
                     )
                 }
                 composable(Screen.TransactionHistory.route) {
                     TransactionHistoryScreen(
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStackSafely() }
                     )
                 }
 
@@ -169,7 +210,7 @@ fun VolticApp(
                         GenerateReceiveScreen(
                             walletManager = walletManager,
                             currentAddress = address,
-                            onBack = { navController.popBackStack() }
+                            onBack = { navController.popBackStackSafely() }
                         )
                     }
                 }
@@ -178,11 +219,11 @@ fun VolticApp(
                     ScanQrScreen(
                         onPaymentScanned = { paymentRequest ->
                             pendingPaymentRequest = paymentRequest
-                            navController.navigate(Screen.ConfirmPayment.route) {
+                            navController.navigateSafely(Screen.ConfirmPayment.route) {
                                 popUpTo(Screen.ScanQr.route) { inclusive = true }
                             }
                         },
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStackSafely() }
                     )
                 }
 
@@ -194,13 +235,13 @@ fun VolticApp(
                             onPaymentSuccess = {
                                 pendingPaymentRequest = null
                                 NfcSession.clear()
-                                navController.navigate(Screen.Dashboard.route) {
+                                navController.navigateSafely(Screen.Dashboard.route) {
                                     popUpTo(Screen.Dashboard.route) { inclusive = true }
                                 }
                             },
                             onBack = {
                                 pendingPaymentRequest = null
-                                navController.popBackStack()
+                                navController.popBackStackSafely()
                             }
                         )
                     }

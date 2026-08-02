@@ -1,5 +1,6 @@
 package com.voltic.app.ui.screens.settings
 
+import com.voltic.app.ui.components.SpendLimitUsageCard
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
@@ -13,8 +14,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voltic.app.R
@@ -115,9 +119,10 @@ fun SpendLimitScreen(
             }
 
             // ALWAYS-VISIBLE TOGGLE CARD
-            ElevatedCard(
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(28.dp)
+                shape = RoundedCornerShape(28.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Row(
                     modifier = Modifier.padding(24.dp).fillMaxWidth(),
@@ -131,7 +136,17 @@ fun SpendLimitScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Off: every payment sends straight from your wallet. On: you can load capital into an on-chain vault with spending limits, usable from NFC and QR.",
+                            text = buildAnnotatedString {
+                                append("Off: every payment sends straight from your wallet. On: you can load capital into an on-chain vault with spending limits, ")
+                                withStyle(
+                                    style = SpanStyle(
+                                        fontSize = MaterialTheme.typography.bodyMedium.fontSize,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                ) {
+                                    append("usable from NFC and QR ONLY.")
+                                }
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -148,7 +163,7 @@ fun SpendLimitScreen(
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(32.dp),
-                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f))
+                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
                 ) {
                     Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text("Spending Capital", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -159,25 +174,9 @@ fun SpendLimitScreen(
                             style = MaterialTheme.typography.displaySmall,
                             fontWeight = FontWeight.Black
                         )
-
                         currentLimitInfo?.let { info ->
                             if (info.amount > BigInteger.ZERO) {
-                                val usagePercent = (info.spent.toDouble() / info.amount.toDouble()).coerceIn(0.0, 1.0)
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        val usedPct = (usagePercent * 100).toInt()
-                                        Text("Spending Limit: $usedPct% Used", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                        val periodLabel = if (info.period < periods.size) periods[info.period] else "Active"
-                                        Text(periodLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                                    }
-                                    LinearProgressIndicator(
-                                        progress = { usagePercent.toFloat() },
-                                        modifier = Modifier.fillMaxWidth().height(10.dp),
-                                        strokeCap = androidx.compose.ui.graphics.StrokeCap.Round,
-                                        color = if (usagePercent > 0.8) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                    )
-                                }
+                                SpendLimitUsageCard(limitInfo = currentLimitInfo)
                             } else {
                                 Text("No spending limit set (Unlimited)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                             }
@@ -217,7 +216,7 @@ fun SpendLimitScreen(
                                 shape = RoundedCornerShape(12.dp),
                                 enabled = !isUpdating && AmountInputSanitizer.isGreaterThanZero(managementAmountInput)
                             ) {
-                                Text("Load In")
+                                Text("Deposit")
                             }
                             OutlinedButton(
                                 onClick = {
@@ -248,46 +247,57 @@ fun SpendLimitScreen(
                 // 2. LIMIT SETTING SECTION
                 Text("Limit Configuration", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 
-                ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = !expanded }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    OutlinedTextField(
-                        value = periods[selectedPeriod],
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Time Window") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(),
-                        shape = RoundedCornerShape(16.dp)
-                    )
-
-                    ExposedDropdownMenu(
+                    // Left: Time Window Dropdown
+                    ExposedDropdownMenuBox(
                         expanded = expanded,
-                        onDismissRequest = { expanded = false }
+                        onExpandedChange = { expanded = !expanded },
+                        modifier = Modifier.weight(1f)
                     ) {
-                        periods.forEachIndexed { index, period ->
-                            DropdownMenuItem(
-                                text = { Text(period) },
-                                onClick = {
-                                    selectedPeriod = index
-                                    expanded = false
-                                }
-                            )
+                        OutlinedTextField(
+                            value = periods[selectedPeriod],
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Time Window") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            periods.forEachIndexed { index, period ->
+                                DropdownMenuItem(
+                                    text = { Text(period) },
+                                    onClick = {
+                                        selectedPeriod = index
+                                        expanded = false
+                                    }
+                                )
+                            }
                         }
                     }
-                }
 
-                OutlinedTextField(
-                    value = limitAmountInput,
-                    onValueChange = { limitAmountInput = AmountInputSanitizer.sanitizeCryptoAmount(it, limitAmountInput) },
-                    label = { Text("Limit Amount (ETH)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    shape = RoundedCornerShape(16.dp),
-                    placeholder = { Text("e.g. 0.05") }
-                )
+                    // Right: Limit Amount Input
+                    OutlinedTextField(
+                        value = limitAmountInput,
+                        onValueChange = { limitAmountInput = AmountInputSanitizer.sanitizeCryptoAmount(it, limitAmountInput) },
+                        label = { Text("Limit (ETH)") },
+                        modifier = Modifier.weight(1.5f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        shape = RoundedCornerShape(16.dp),
+                        placeholder = { Text("e.g. 0.05") }
+                    )
+                }
 
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f),

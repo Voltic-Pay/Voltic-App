@@ -31,3 +31,11 @@
 -keep class com.voltic.app.wallet.** { *; }
 -keep class com.voltic.app.payload.** { *; }
 -keep class com.voltic.app.ui.model.** { *; }
+
+
+# Web3j generated contract wrappers — preserve generics for reflection-based ABI decoding
+-keep class com.voltic.contracts.** { *; }
+-keepclassmembers class com.voltic.contracts.** { *; }
+-keep,allowobfuscation,allowshrinking class org.web3j.abi.TypeReference
+-keep class org.web3j.abi.datatypes.** { *; }
+-keepattributes Signature, Exceptions, *Annotation*, InnerClasses, EnclosingMethod

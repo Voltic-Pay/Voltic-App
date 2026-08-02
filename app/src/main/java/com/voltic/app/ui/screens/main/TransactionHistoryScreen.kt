@@ -43,6 +43,12 @@ import com.voltic.app.ui.components.TransactionItem
 import com.voltic.app.ui.components.TransactionSkeletonItem
 import com.voltic.app.wallet.WalletManager
 import kotlinx.coroutines.launch
+/* NOTE: this transaction history need screen the com.voltic.app.chain.ui.explorer do the fetching
+it need a new impimentation + some edits toe the samt contract to be able to se the history when
+enabling the spending limits -because it a samrt contract and not a basic transaction the api won't help-
+the -0 you will see if enabled is the fees
+
+there is other ways to fix it but i will not don't think i am doing it for now*/
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

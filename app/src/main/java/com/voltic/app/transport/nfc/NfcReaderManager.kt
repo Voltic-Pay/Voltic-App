@@ -24,7 +24,22 @@ import java.math.BigInteger
 sealed class ReaderState {
     object WaitingForTap1 : ReaderState()
     data class ProcessingTap1(val address: String) : ReaderState()
-    data class WaitingForTap2(val customerAddress: String, val nonce: BigInteger, val gasPrice: BigInteger) : ReaderState()
+
+    // NOTE: two separate nonces are carried here on purpose.
+    // - vaultNonce: the contract's per-owner Payment counter (nonces[owner] in
+    //   VolticSmartWallet.sol). Only valid for the meta-tx / executePayment path.
+    // - eoaNonce: the account's real on-chain transaction count. Only valid for
+    //   the legacy/direct raw-transaction path (signEthTransactionOffline).
+    // We don't know at tap1 which path the customer will choose (that's decided
+    // on their phone, after tap1, via the spend-limit toggle), so we fetch both
+    // up front and let tap2 / the HCE service pick the correct one.
+    data class WaitingForTap2(
+        val customerAddress: String,
+        val vaultNonce: BigInteger,
+        val eoaNonce: BigInteger,
+        val gasPrice: BigInteger
+    ) : ReaderState()
+
     object Broadcasting : ReaderState()
     data class Success(val txHash: String) : ReaderState()
     data class Error(val message: String) : ReaderState()
@@ -70,9 +85,13 @@ class NfcReaderManager(
 
                     scope.launch {
                         try {
-                            val nonce = web3j.ethGetTransactionCount(customerAddress, DefaultBlockParameterName.PENDING).send().transactionCount
-                            val gasPrice = web3j.ethGasPrice().send().gasPrice.multiply(BigInteger.valueOf(12)).divide(BigInteger.valueOf(10))
-                            updateState(ReaderState.WaitingForTap2(customerAddress, nonce, gasPrice))
+                            val vaultNonce = ArbitrumClient().getVaultNonce(customerAddress)
+                            val eoaNonce = web3j.ethGetTransactionCount(
+                                customerAddress, DefaultBlockParameterName.PENDING
+                            ).send().transactionCount
+                            val gasPrice = web3j.ethGasPrice().send().gasPrice
+                                .multiply(BigInteger.valueOf(12)).divide(BigInteger.valueOf(10))
+                            updateState(ReaderState.WaitingForTap2(customerAddress, vaultNonce, eoaNonce, gasPrice))
                         } catch (e: Exception) {
                             Log.e(TAG, "Network error fetching nonce/gas", e)
                             updateState(ReaderState.Error("Network error fetching nonce."))
@@ -86,7 +105,9 @@ class NfcReaderManager(
                     val aidBytes = ApduConstants.AID.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
                     isoDep.transceive(byteArrayOf(0x00, 0xA4.toByte(), 0x04, 0x00, aidBytes.size.toByte()) + aidBytes)
 
-                    val payload = "${state.nonce}|${state.gasPrice}".toByteArray(Charsets.UTF_8)
+                    // Send BOTH nonces + gas price; the customer's HCE service picks
+                    // the one that matches whichever path they actually chose.
+                    val payload = "${state.vaultNonce}|${state.eoaNonce}|${state.gasPrice}".toByteArray(Charsets.UTF_8)
                     val commandApdu = byteArrayOf(0x00, 0xD1.toByte(), 0x00, 0x00, payload.size.toByte()) + payload
 
                     val response = isoDep.transceive(commandApdu)
@@ -94,12 +115,13 @@ class NfcReaderManager(
 
                     val statusWord = response.takeLast(2).toByteArray()
                     if (!statusWord.contentEquals(ApduConstants.STATUS_SUCCESS)) {
+                        updateState(ReaderState.Error("Customer device not ready. Tap again."))
                         return
                     }
 
                     val rawData = response.dropLast(2).toByteArray()
 
-                    if (rawData.isNotEmpty() && rawData[0] == 'V'.toByte()) {
+                        if (rawData.isNotEmpty() && rawData[0] == 'V'.code.toByte()) {
                         val responseString = String(rawData, Charsets.UTF_8)
                         val parts = responseString.split("|")
                         val signatureHex = parts[1]
