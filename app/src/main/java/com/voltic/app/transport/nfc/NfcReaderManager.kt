@@ -6,19 +6,12 @@ import android.nfc.tech.IsoDep
 import android.util.Log
 import com.voltic.app.chain.ArbitrumClient
 import com.voltic.app.payload.NFCPaymentRequest
-import com.voltic.contracts.VolticSmartWallet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
 import org.web3j.crypto.Credentials
-import org.web3j.protocol.core.DefaultBlockParameterName
-import org.web3j.tx.RawTransactionManager
-import org.web3j.tx.gas.StaticGasProvider
-import org.web3j.utils.Convert
-import org.web3j.utils.Numeric
 import java.math.BigInteger
 
 sealed class ReaderState {
@@ -35,9 +28,7 @@ sealed class ReaderState {
     // up front and let tap2 / the HCE service pick the correct one.
     data class WaitingForTap2(
         val customerAddress: String,
-        val vaultNonce: BigInteger,
-        val eoaNonce: BigInteger,
-        val gasPrice: BigInteger
+        val params: ArbitrumClient.OfflinePaymentParams
     ) : ReaderState()
 
     object Broadcasting : ReaderState()
@@ -58,7 +49,7 @@ class NfcReaderManager(
 
     private var currentState: ReaderState = ReaderState.WaitingForTap1
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val web3j = ArbitrumClient.web3j
+    private val chain = ArbitrumClient()
 
     fun start() {
         Log.i(TAG, "Starting NFC Reader for request: ${request.amountEth} ETH")
@@ -85,16 +76,16 @@ class NfcReaderManager(
 
                     scope.launch {
                         try {
-                            val vaultNonce = ArbitrumClient().getVaultNonce(customerAddress)
-                            val eoaNonce = web3j.ethGetTransactionCount(
-                                customerAddress, DefaultBlockParameterName.PENDING
-                            ).send().transactionCount
-                            val gasPrice = web3j.ethGasPrice().send().gasPrice
-                                .multiply(BigInteger.valueOf(12)).divide(BigInteger.valueOf(10))
-                            updateState(ReaderState.WaitingForTap2(customerAddress, vaultNonce, eoaNonce, gasPrice))
+                            // CLEAN: Ask the chain helper for everything we need
+                            val params = chain.getOfflinePaymentParams(
+                                customerAddress = customerAddress,
+                                toAddress = request.to,
+                                amountEth = request.amountEth ?: "0"
+                            )
+                            updateState(ReaderState.WaitingForTap2(customerAddress, params))
                         } catch (e: Exception) {
-                            Log.e(TAG, "Network error fetching nonce/gas", e)
-                            updateState(ReaderState.Error("Network error fetching nonce."))
+                            Log.e(TAG, "Network error fetching prep parameters", e)
+                            updateState(ReaderState.Error("Network error fetching required data."))
                         }
                     }
                 }
@@ -105,9 +96,7 @@ class NfcReaderManager(
                     val aidBytes = ApduConstants.AID.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
                     isoDep.transceive(byteArrayOf(0x00, 0xA4.toByte(), 0x04, 0x00, aidBytes.size.toByte()) + aidBytes)
 
-                    // Send BOTH nonces + gas price; the customer's HCE service picks
-                    // the one that matches whichever path they actually chose.
-                    val payload = "${state.vaultNonce}|${state.eoaNonce}|${state.gasPrice}".toByteArray(Charsets.UTF_8)
+                    val payload = "${state.params.vaultNonce}|${state.params.eoaNonce}|${state.params.gasPrice}|${state.params.gasLimit}".toByteArray(Charsets.UTF_8)
                     val commandApdu = byteArrayOf(0x00, 0xD1.toByte(), 0x00, 0x00, payload.size.toByte()) + payload
 
                     val response = isoDep.transceive(commandApdu)
@@ -121,7 +110,8 @@ class NfcReaderManager(
 
                     val rawData = response.dropLast(2).toByteArray()
 
-                        if (rawData.isNotEmpty() && rawData[0] == 'V'.code.toByte()) {
+                    if (rawData.isNotEmpty() && rawData[0] == 'V'.code.toByte()) {
+                        // --- VAULT PATH ---
                         val responseString = String(rawData, Charsets.UTF_8)
                         val parts = responseString.split("|")
                         val signatureHex = parts[1]
@@ -132,49 +122,34 @@ class NfcReaderManager(
                         updateState(ReaderState.Broadcasting)
                         scope.launch {
                             try {
-                                ArbitrumClient.txMutex.withLock {
-                                    val txManager = RawTransactionManager(web3j, merchantCredentials, ArbitrumClient.ARBITRUM_CHAIN_ID, 40, 500L)
-
-                                    val baseGasPrice = web3j.ethGasPrice().send().gasPrice
-                                    val gasPrice = baseGasPrice.multiply(BigInteger.valueOf(12)).divide(BigInteger.valueOf(10))
-                                    val gasProvider = StaticGasProvider(gasPrice, BigInteger.valueOf(120_000))
-
-                                    val vault = VolticSmartWallet.load(ArbitrumClient.VAULT_ADDRESS, web3j, txManager, gasProvider)
-                                    val amountWei = Convert.toWei(amountEthFromPeer, Convert.Unit.ETHER).toBigInteger()
-
-                                    val receipt = vault.executePayment(
-                                        state.customerAddress,
-                                        request.to,
-                                        amountWei,
-                                        nonce,
-                                        deadline,
-                                        Numeric.hexStringToByteArray(signatureHex)
-                                    ).send()
-
-                                    if (!receipt.isStatusOK) throw Exception("Transaction reverted")
-                                    updateState(ReaderState.Success(receipt.transactionHash))
-                                }
+                                // CLEAN: Pass off all raw variables to the chain layer!
+                                val txHash = chain.broadcastNfcVaultPayment(
+                                    merchantCredentials = merchantCredentials,
+                                    customerAddress = state.customerAddress,
+                                    toAddress = request.to,
+                                    amountEth = amountEthFromPeer,
+                                    nonce = nonce,
+                                    deadline = deadline,
+                                    signatureHex = signatureHex
+                                )
+                                updateState(ReaderState.Success(txHash))
                             } catch (e: Exception) {
                                 Log.e(TAG, "Vault broadcast failed", e)
-                                val displayMsg = ArbitrumClient.formatError(e.message)
-                                updateState(ReaderState.Error("Broadcast failed: $displayMsg"))
+                                updateState(ReaderState.Error("Broadcast failed: ${ArbitrumClient.formatError(e.message)}"))
                             }
                         }
                     } else {
-                        // Legacy Raw TX
-                        val signedTxHex = Numeric.toHexString(rawData)
+                        // --- LEGACY PATH ---
+                        val signedTxHex = org.web3j.utils.Numeric.toHexString(rawData) // only utility import needed
                         updateState(ReaderState.Broadcasting)
                         scope.launch {
                             try {
-                                ArbitrumClient.txMutex.withLock {
-                                    val ethResponse = web3j.ethSendRawTransaction(signedTxHex).send()
-                                    if (ethResponse.hasError()) throw Exception(ethResponse.error.message)
-                                    updateState(ReaderState.Success(ethResponse.transactionHash))
-                                }
+                                // CLEAN: Pass the hex to the chain layer!
+                                val txHash = chain.broadcastLegacyTransaction(signedTxHex)
+                                updateState(ReaderState.Success(txHash))
                             } catch (e: Exception) {
                                 Log.e(TAG, "Legacy broadcast failed", e)
-                                val displayMsg = ArbitrumClient.formatError(e.message)
-                                updateState(ReaderState.Error("Broadcast failed: $displayMsg"))
+                                updateState(ReaderState.Error("Broadcast failed: ${ArbitrumClient.formatError(e.message)}"))
                             }
                         }
                     }

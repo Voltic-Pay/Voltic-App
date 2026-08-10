@@ -82,7 +82,8 @@ class VolticHceService : HostApduService() {
             val vaultNonce = BigInteger(parts[0])
             val eoaNonce = BigInteger(parts[1])
             val gasPrice = BigInteger(parts[2])
-            Log.d(TAG, "Parsed vaultNonce: $vaultNonce, eoaNonce: $eoaNonce, gasPrice: $gasPrice")
+            val gasLimit = BigInteger(parts[3])
+            Log.d(TAG, "Parsed vaultNonce: $vaultNonce, eoaNonce: $eoaNonce, gasPrice: $gasPrice, gasLimit:$gasLimit")
 
             val creds = WalletManager(this).loadExistingWallet()!!
             val request = NfcSession.pendingRequest.value!!
@@ -104,7 +105,7 @@ class VolticHceService : HostApduService() {
 
             Log.i(TAG, "Starting Offline Signing for ${request.amountEth} ETH")
             val rawSignedTx = chain.signEthTransactionOffline(
-                creds, request.to, request.amountEth ?: "0", eoaNonce, gasPrice
+                creds, request.to, request.amountEth ?: "0", eoaNonce, gasPrice,gasLimit
             )
 
             NfcSession.clear()

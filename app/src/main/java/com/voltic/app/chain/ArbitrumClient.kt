@@ -6,8 +6,11 @@ import com.voltic.contracts.VolticSmartWallet
 import io.github.adraffy.ens.ENSNormalize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.web3j.abi.FunctionEncoder
 import org.web3j.abi.TypeEncoder
 import org.web3j.abi.datatypes.Address
+import org.web3j.abi.datatypes.DynamicBytes
+import org.web3j.abi.datatypes.Function
 import org.web3j.abi.datatypes.generated.Uint256
 import org.web3j.abi.datatypes.generated.Bytes32
 import org.web3j.crypto.*
@@ -37,12 +40,8 @@ class ArbitrumClient {
         val ensWeb3j: Web3j by lazy { Web3j.build(HttpService(ENS_RPC_URL)) }
         val txMutex = Mutex()
 
-        // Read-only gas provider: zero gas price, 300k limit. Safe, free, and incredibly fast.
         private val readOnlyGasProvider = StaticGasProvider(BigInteger.ZERO, BigInteger.valueOf(300_000))
 
-        /**
-         * Maps low-level RPC error strings to user-friendly messages.
-         */
         fun formatError(message: String?): String {
             val msg = message ?: return "Unknown error"
             return if (msg.contains("0x0") && msg.contains("revert", ignoreCase = true)) {
@@ -55,6 +54,44 @@ class ArbitrumClient {
 
     private val web3j: Web3j get() = ArbitrumClient.web3j
     private val ensWeb3j: Web3j get() = ArbitrumClient.ensWeb3j
+
+    // --- NEW: Clean Data Class for NFC prep ---
+    data class OfflinePaymentParams(
+        val vaultNonce: BigInteger,
+        val eoaNonce: BigInteger,
+        val gasPrice: BigInteger,
+        val gasLimit: BigInteger
+    )
+
+    // ==========================================
+    // DYNAMIC GAS ESTIMATOR
+    // ==========================================
+    private suspend fun estimateGasLimit(
+        from: String,
+        to: String,
+        value: BigInteger,
+        data: String = "0x",
+        fallback: BigInteger
+    ): BigInteger = withContext(Dispatchers.IO) {
+        try {
+            val response = web3j.ethEstimateGas(
+                org.web3j.protocol.core.methods.request.Transaction.createFunctionCallTransaction(
+                    from, null, null, null, to, value, data
+                )
+            ).send()
+
+            if (response.hasError()) {
+                android.util.Log.w("ArbitrumClient", "Gas estimate error: ${response.error.message}, using fallback")
+                return@withContext fallback
+            }
+
+            // 20% buffer
+            response.amountUsed.multiply(BigInteger.valueOf(12)).divide(BigInteger.valueOf(10))
+        } catch (e: Exception) {
+            android.util.Log.e("ArbitrumClient", "Gas estimation failed, using fallback", e)
+            fallback
+        }
+    }
 
     private suspend fun getGasProvider(gasLimit: BigInteger): StaticGasProvider = withContext(Dispatchers.IO) {
         try {
@@ -75,68 +112,140 @@ class ArbitrumClient {
     }
 
     suspend fun getVaultBalance(address: String): BigInteger = withContext(Dispatchers.IO) {
-        try {
-            val txManager = ReadonlyTransactionManager(web3j, address)
-            val vault = VolticSmartWallet.load(VAULT_ADDRESS, web3j, txManager, readOnlyGasProvider)
-            vault.balanceOf(address).send() ?: BigInteger.ZERO
-        } catch (e: Exception) {
-            android.util.Log.e("ArbitrumClient", "Vault balance fetch failed", e)
-            BigInteger.ZERO
-        }
+        val txManager = ReadonlyTransactionManager(web3j, address)
+        val vault = VolticSmartWallet.load(VAULT_ADDRESS, web3j, txManager, readOnlyGasProvider)
+        vault.balanceOf(address).send() ?: BigInteger.ZERO
     }
 
     suspend fun getVaultNonce(address: String): BigInteger = withContext(Dispatchers.IO) {
-        try {
-            val txManager = ReadonlyTransactionManager(web3j, address)
-            val vault = VolticSmartWallet.load(VAULT_ADDRESS, web3j, txManager, readOnlyGasProvider)
-            vault.nonces(address).send() ?: BigInteger.ZERO
-        } catch (e: Exception) {
-            android.util.Log.e("ArbitrumClient", "Vault nonce fetch failed", e)
-            BigInteger.ZERO
-        }
+        val txManager = ReadonlyTransactionManager(web3j, address)
+        val vault = VolticSmartWallet.load(VAULT_ADDRESS, web3j, txManager, readOnlyGasProvider)
+        vault.nonces(address).send() ?: BigInteger.ZERO
     }
 
     suspend fun getReceiverAddress(rawRecipient: String): String = withContext(Dispatchers.IO) {
         val normalizedRecipient = rawRecipient.trim()
         if (normalizedRecipient.endsWith(".eth", ignoreCase = true)) {
-            val ensResolver = EnsResolver(ensWeb3j)
-            val ensName = ENSNormalize.ENSIP15.normalize(normalizedRecipient)
-            val address = ensResolver.resolve(ensName)
-            if (address == null || address == "0x0000000000000000000000000000000000000000") {
-                throw IllegalArgumentException("Invalid or unregistered ENS name: $rawRecipient")
+            val address = EnsResolver(ensWeb3j).resolve(ENSNormalize.ENSIP15.normalize(normalizedRecipient))
+            require(!address.isNullOrEmpty() && address != "0x0000000000000000000000000000000000000000") {
+                "Invalid ENS name"
             }
             address
-        } else {
-            normalizedRecipient
+        } else normalizedRecipient
+    }
+
+
+
+    suspend fun getOfflinePaymentParams(
+        customerAddress: String,
+        toAddress: String,
+        amountEth: String
+    ): OfflinePaymentParams = withContext(Dispatchers.IO) {
+        val vaultNonce = getVaultNonce(customerAddress)
+        val eoaNonce = web3j.ethGetTransactionCount(customerAddress, DefaultBlockParameterName.PENDING).send().transactionCount
+        val gasPrice = web3j.ethGasPrice().send().gasPrice.multiply(BigInteger.valueOf(12)).divide(BigInteger.valueOf(10))
+
+        val amountWei = Convert.toWei(amountEth.ifBlank { "0" }, Convert.Unit.ETHER).toBigInteger()
+        val resolvedTo = getReceiverAddress(toAddress)
+
+        // Only estimate for Legacy transfer here. Vault is estimated during broadcast when we have the signature.
+        val gasLimit = estimateGasLimit(
+            from = customerAddress,
+            to = resolvedTo,
+            value = amountWei,
+            data = "0x",
+            fallback = BigInteger.valueOf(21_000)
+        )
+
+        OfflinePaymentParams(vaultNonce, eoaNonce, gasPrice, gasLimit)
+    }
+
+    suspend fun broadcastLegacyTransaction(signedTxHex: String): String = withContext(Dispatchers.IO) {
+        txMutex.withLock {
+            val ethResponse = web3j.ethSendRawTransaction(signedTxHex).send()
+            require(!ethResponse.hasError()) { ethResponse.error.message }
+            ethResponse.transactionHash
+        }
+    }
+
+    suspend fun broadcastNfcVaultPayment(
+        merchantCredentials: Credentials,
+        customerAddress: String,
+        toAddress: String,
+        amountEth: String,
+        nonce: BigInteger,
+        deadline: BigInteger,
+        signatureHex: String
+    ): String = withContext(Dispatchers.IO) {
+        txMutex.withLock {
+            val amountWei = Convert.toWei(amountEth, Convert.Unit.ETHER).toBigInteger()
+            val resolvedTo = getReceiverAddress(toAddress)
+
+            // 1. Encode with the REAL signature so the contract won't revert during estimation
+            val function = Function("executePayment", listOf(
+                Address(customerAddress),
+                Address(resolvedTo),
+                Uint256(amountWei),
+                Uint256(nonce),
+                Uint256(deadline),
+                DynamicBytes(Numeric.hexStringToByteArray(signatureHex))
+            ), emptyList())
+            val encodedData = FunctionEncoder.encode(function)
+
+            // 2. Fetch the true gas limit, safe fallback of 150_000 for storage updates
+            val trueGasLimit = estimateGasLimit(
+                from = merchantCredentials.address,
+                to = VAULT_ADDRESS,
+                value = BigInteger.ZERO,
+                data = encodedData,
+                fallback = BigInteger.valueOf(150_000)
+            )
+
+            // 3. Broadcast
+            val txManager = RawTransactionManager(web3j, merchantCredentials, ARBITRUM_CHAIN_ID, 40, 500L)
+            val vault = VolticSmartWallet.load(VAULT_ADDRESS, web3j, txManager, getGasProvider(trueGasLimit))
+
+            val receipt = vault.executePayment(
+                customerAddress,
+                resolvedTo,
+                amountWei,
+                nonce,
+                deadline,
+                Numeric.hexStringToByteArray(signatureHex)
+            ).send()
+
+            require(receipt.isStatusOK) { "Transaction reverted by Vault" }
+            receipt.transactionHash
         }
     }
 
     suspend fun depositToVault(credentials: Credentials, amountEth: String): String = withContext(Dispatchers.IO) {
         txMutex.withLock {
-            val txManager = RawTransactionManager(web3j, credentials, ARBITRUM_CHAIN_ID, 40, 500L)
-            val gasProvider = getGasProvider(BigInteger.valueOf(60_000))
-            val vault = VolticSmartWallet.load(VAULT_ADDRESS, web3j, txManager, gasProvider)
             val amountWei = Convert.toWei(amountEth, Convert.Unit.ETHER).toBigInteger()
+            val function = Function("deposit", listOf(Uint256(amountWei)), emptyList())
+            val encodedData = FunctionEncoder.encode(function)
+            val dynamicGasLimit = estimateGasLimit(credentials.address, VAULT_ADDRESS, amountWei, encodedData, BigInteger.valueOf(60_000))
+            val txManager = RawTransactionManager(web3j, credentials, ARBITRUM_CHAIN_ID, 40, 500L)
+            val vault = VolticSmartWallet.load(VAULT_ADDRESS, web3j, txManager, getGasProvider(dynamicGasLimit))
+
             val receipt = vault.deposit(amountWei).send()
-            if (!receipt.isStatusOK) {
-                android.util.Log.e("ArbitrumClient", "Vault deposit status failed")
-                throw IllegalStateException("Vault deposit failed")
-            }
+            require(receipt.isStatusOK) { "Vault deposit failed" }
             receipt.transactionHash
         }
     }
 
     suspend fun withdrawFromVault(credentials: Credentials, amountEth: String): String = withContext(Dispatchers.IO) {
         txMutex.withLock {
-            val txManager = RawTransactionManager(web3j, credentials, ARBITRUM_CHAIN_ID, 40, 500L)
-            val gasProvider = getGasProvider(BigInteger.valueOf(70_000))
-            val vault = VolticSmartWallet.load(VAULT_ADDRESS, web3j, txManager, gasProvider)
             val amountWei = Convert.toWei(amountEth, Convert.Unit.ETHER).toBigInteger()
+            val function = Function("withdraw", listOf(Uint256(amountWei)), emptyList())
+            val encodedData = FunctionEncoder.encode(function)
+
+            val dynamicGasLimit = estimateGasLimit(credentials.address, VAULT_ADDRESS, BigInteger.ZERO, encodedData, BigInteger.valueOf(70_000))
+            val txManager = RawTransactionManager(web3j, credentials, ARBITRUM_CHAIN_ID, 40, 500L)
+            val vault = VolticSmartWallet.load(VAULT_ADDRESS, web3j, txManager, getGasProvider(dynamicGasLimit))
+
             val receipt = vault.withdraw(amountWei).send()
-            if (!receipt.isStatusOK) {
-                android.util.Log.e("ArbitrumClient", "Vault withdrawal status failed")
-                throw IllegalStateException("Vault withdrawal failed")
-            }
+            require(receipt.isStatusOK) { "Vault withdrawal failed" }
             receipt.transactionHash
         }
     }
@@ -144,31 +253,25 @@ class ArbitrumClient {
     data class SpendLimitInfo(val amount: BigInteger, val spent: BigInteger, val period: Int)
 
     suspend fun getSpendLimitInfo(address: String): SpendLimitInfo = withContext(Dispatchers.IO) {
-        try {
-            val txManager = ReadonlyTransactionManager(web3j, address)
-            val vault = VolticSmartWallet.load(VAULT_ADDRESS, web3j, txManager, readOnlyGasProvider)
-            val limits = vault.spendLimits(address).send()
-            val period = vault.spendPeriod(address).send()
-            SpendLimitInfo(limits.component1(), limits.component2(), period.toInt())
-        } catch (e: Exception) {
-            android.util.Log.e("ArbitrumClient", "Spend limit info fetch failed", e)
-            SpendLimitInfo(BigInteger.ZERO, BigInteger.ZERO, 0)
-        }
+        val txManager = ReadonlyTransactionManager(web3j, address)
+        val vault = VolticSmartWallet.load(VAULT_ADDRESS, web3j, txManager, readOnlyGasProvider)
+        val limits = vault.spendLimits(address).send()
+        val period = vault.spendPeriod(address).send()
+        SpendLimitInfo(limits.component1(), limits.component2(), period.toInt())
     }
 
     suspend fun updateSpendLimit(credentials: Credentials, periodIndex: Int, amountEth: String): String = withContext(Dispatchers.IO) {
         txMutex.withLock {
-            val txManager = RawTransactionManager(web3j, credentials, ARBITRUM_CHAIN_ID, 40, 500L)
-            val gasProvider = getGasProvider(BigInteger.valueOf(80_000))
-            val vault = VolticSmartWallet.load(VAULT_ADDRESS, web3j, txManager, gasProvider)
-
             val amountWei = Convert.toWei(amountEth, Convert.Unit.ETHER).toBigInteger()
-            val receipt = vault.setSpendLimit(BigInteger.valueOf(periodIndex.toLong()), amountWei).send()
+            val function = Function("setSpendLimit", listOf(Uint256(periodIndex.toLong()), Uint256(amountWei)), emptyList())
+            val encodedData = FunctionEncoder.encode(function)
 
-            if (!receipt.isStatusOK) {
-                android.util.Log.e("ArbitrumClient", "Set spend limit status failed")
-                throw IllegalStateException("Failed to update spending limit")
-            }
+            val dynamicGasLimit = estimateGasLimit(credentials.address, VAULT_ADDRESS, BigInteger.ZERO, encodedData, BigInteger.valueOf(80_000))
+            val txManager = RawTransactionManager(web3j, credentials, ARBITRUM_CHAIN_ID, 40, 500L)
+            val vault = VolticSmartWallet.load(VAULT_ADDRESS, web3j, txManager, getGasProvider(dynamicGasLimit))
+
+            val receipt = vault.setSpendLimit(BigInteger.valueOf(periodIndex.toLong()), amountWei).send()
+            require(receipt.isStatusOK) { "Failed to update spending limit" }
             receipt.transactionHash
         }
     }
@@ -181,23 +284,19 @@ class ArbitrumClient {
         txMutex.withLock {
             val resolvedAddress = getReceiverAddress(toAddress)
             val fromAddress = credentials.address
-
-            val nonce = web3j.ethGetTransactionCount(fromAddress, DefaultBlockParameterName.PENDING).send().transactionCount
             val amountWei = Convert.toWei(BigDecimal(amountEth), Convert.Unit.ETHER).toBigInteger()
 
+            val gasLimit = estimateGasLimit(fromAddress, resolvedAddress, amountWei, "0x", BigInteger.valueOf(21_000))
+
+            val nonce = web3j.ethGetTransactionCount(fromAddress, DefaultBlockParameterName.PENDING).send().transactionCount
             val baseGasPrice = web3j.ethGasPrice().send().gasPrice
             val gasPrice = baseGasPrice.multiply(BigInteger.valueOf(12)).divide(BigInteger.valueOf(10))
-            val gasLimit = BigInteger.valueOf(21_000)
 
             val rawTransaction = RawTransaction.createEtherTransaction(nonce, gasPrice, gasLimit, resolvedAddress, amountWei)
             val signedMessage = TransactionEncoder.signMessage(rawTransaction, ARBITRUM_CHAIN_ID, credentials)
-            val hexValue = Numeric.toHexString(signedMessage)
 
-            val response = web3j.ethSendRawTransaction(hexValue).send()
-            if (response.hasError()) {
-                android.util.Log.e("ArbitrumClient", "sendEth failed: ${response.error.message}")
-                throw IllegalStateException("Transaction failed: ${response.error.message}")
-            }
+            val response = web3j.ethSendRawTransaction(Numeric.toHexString(signedMessage)).send()
+            require(!response.hasError()) { "Transaction failed: ${response.error.message}" }
             response.transactionHash
         }
     }
@@ -207,30 +306,25 @@ class ArbitrumClient {
         toAddress: String,
         amountEth: String
     ): String = withContext(Dispatchers.IO) {
-        txMutex.withLock {
+
             val resolvedTo = getReceiverAddress(toAddress)
             val ownerAddress = credentials.address
 
             val nonce = getVaultNonce(ownerAddress)
             val deadline = BigInteger.valueOf(System.currentTimeMillis() / 1000 + 1800)
             val signatureHex = signVaultPayment(credentials, resolvedTo, amountEth, nonce, deadline)
-            val amountWei = Convert.toWei(amountEth, Convert.Unit.ETHER).toBigInteger()
 
-            val txManager = RawTransactionManager(web3j, credentials, ARBITRUM_CHAIN_ID, 40, 500L)
-            val gasProvider = getGasProvider(BigInteger.valueOf(120_000))
-            val vault = VolticSmartWallet.load(VAULT_ADDRESS, web3j, txManager, gasProvider)
+            // Forward directly to the clean broadcast helper!
+            broadcastNfcVaultPayment(
+                merchantCredentials = credentials,
+                customerAddress = ownerAddress,
+                toAddress = resolvedTo,
+                amountEth = amountEth,
+                nonce = nonce,
+                deadline = deadline,
+                signatureHex = signatureHex
+            )
 
-            val receipt = vault.executePayment(
-                ownerAddress, resolvedTo, amountWei, nonce, deadline,
-                Numeric.hexStringToByteArray(signatureHex)
-            ).send()
-
-            if (!receipt.isStatusOK) {
-                android.util.Log.e("ArbitrumClient", "Vault payment execute failed")
-                throw IllegalStateException("Vault payment failed")
-            }
-            receipt.transactionHash
-        }
     }
 
     fun signVaultPayment(
@@ -241,12 +335,9 @@ class ArbitrumClient {
         deadline: BigInteger
     ): String {
         val amountWei = Convert.toWei(amountEth, Convert.Unit.ETHER).toBigInteger()
-
-        // 1. Domain Separator
         val domainTypeHash = Hash.sha3("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)".toByteArray())
         val nameHash = Hash.sha3("VolticSmartWallet".toByteArray())
         val versionHash = Hash.sha3("1".toByteArray())
-
         val domainSeparator = Hash.sha3(
             Numeric.hexStringToByteArray(TypeEncoder.encode(Bytes32(domainTypeHash))) +
                     Numeric.hexStringToByteArray(TypeEncoder.encode(Bytes32(nameHash))) +
@@ -254,8 +345,6 @@ class ArbitrumClient {
                     Numeric.hexStringToByteArray(TypeEncoder.encode(Uint256(ARBITRUM_CHAIN_ID))) +
                     Numeric.hexStringToByteArray(TypeEncoder.encode(Address(VAULT_ADDRESS)))
         )
-
-        // 2. Struct Hash
         val paymentTypeHash = Hash.sha3("Payment(address owner,address to,uint256 amount,uint256 nonce,uint256 deadline)".toByteArray())
         val structHash = Hash.sha3(
             Numeric.hexStringToByteArray(TypeEncoder.encode(Bytes32(paymentTypeHash))) +
@@ -265,20 +354,9 @@ class ArbitrumClient {
                     Numeric.hexStringToByteArray(TypeEncoder.encode(Uint256(nonce))) +
                     Numeric.hexStringToByteArray(TypeEncoder.encode(Uint256(deadline)))
         )
-
-        // 3. Final EIP-712 Digest
-        val digest = Hash.sha3(
-            byteArrayOf(0x19, 0x01) + domainSeparator + structHash
-        )
-
-        // 4. Sign
+        val digest = Hash.sha3(byteArrayOf(0x19, 0x01) + domainSeparator + structHash)
         val sigData = Sign.signMessage(digest, credentials.ecKeyPair, false)
-
-        val r = sigData.r
-        val s = sigData.s
-        val v = sigData.v
-
-        return Numeric.toHexString(r) + Numeric.toHexStringNoPrefix(s) + Numeric.toHexStringNoPrefix(byteArrayOf(v[0]))
+        return Numeric.toHexString(sigData.r) + Numeric.toHexStringNoPrefix(sigData.s) + Numeric.toHexStringNoPrefix(byteArrayOf(sigData.v[0]))
     }
 
     fun signEthTransactionOffline(
@@ -286,10 +364,10 @@ class ArbitrumClient {
         toAddress: String,
         amountEth: String,
         nonce: BigInteger,
-        gasPriceWei: BigInteger
+        gasPriceWei: BigInteger,
+        gasLimit: BigInteger
     ): ByteArray {
         val amountWei = Convert.toWei(BigDecimal(amountEth), Convert.Unit.ETHER).toBigInteger()
-        val gasLimit = BigInteger.valueOf(21_000)
         val rawTransaction = RawTransaction.createEtherTransaction(nonce, gasPriceWei, gasLimit, toAddress, amountWei)
         return TransactionEncoder.signMessage(rawTransaction, ARBITRUM_CHAIN_ID, credentials)
     }
