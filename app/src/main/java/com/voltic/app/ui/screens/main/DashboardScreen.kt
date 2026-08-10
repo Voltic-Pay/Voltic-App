@@ -477,12 +477,16 @@ fun BalanceCard(label: String, state: BalanceUiState, isVisible: Boolean, onTogg
 
 @Composable
 private fun ActionButton(label: String, icon: Painter, isSelected: Boolean, showDropdown: Boolean = false, onClick: () -> Unit) {
+    val cornerRadius by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (isSelected) 24.dp else 38.dp,
+        label = "shape_anim"
+    )
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(contentAlignment = Alignment.BottomEnd) {
             FilledIconButton(
                 onClick = onClick,
                 modifier = Modifier.size(76.dp),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(cornerRadius),
                 colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
