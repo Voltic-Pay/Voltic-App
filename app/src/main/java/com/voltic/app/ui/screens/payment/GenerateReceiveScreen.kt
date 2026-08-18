@@ -7,7 +7,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,14 +16,16 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voltic.app.R
+import com.voltic.app.chain.explorer.EthPriceCache
 import com.voltic.app.payload.NFCPaymentRequest
 import com.voltic.app.payload.QRPaymentRequest
 import com.voltic.app.transport.nfc.NfcReaderManager
 import com.voltic.app.transport.nfc.ReaderState
 import com.voltic.app.transport.qr.QrGenerator
+import com.voltic.app.ui.components.AmountInputField
 import com.voltic.app.ui.components.StatusBanner
 import com.voltic.app.ui.model.AmountInputSanitizer
 import com.voltic.app.wallet.WalletManager
@@ -45,7 +46,7 @@ fun GenerateReceiveScreen(
     onBack: () -> Unit
 ) {
     val activity = LocalContext.current as Activity
-
+    val ethPriceUsd by EthPriceCache.priceUsd.collectAsStateWithLifecycle()
     var amountInput by remember { mutableStateOf("") }
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
@@ -170,17 +171,13 @@ fun GenerateReceiveScreen(
                 }
             }
 
-            OutlinedTextField(
+            AmountInputField(
                 value = amountInput,
                 onValueChange = { newValue ->
                     amountInput = AmountInputSanitizer.sanitizeCryptoAmount(input = newValue, fallback = amountInput)
                 },
-                label = { Text("Requested Amount (ETH)", style = MaterialTheme.typography.titleMedium) },
-                placeholder = { Text("e.g. 0.005") },
+                ethPriceUsd=ethPriceUsd,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant

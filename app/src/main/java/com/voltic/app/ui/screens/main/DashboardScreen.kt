@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -64,12 +63,14 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voltic.app.R
 import com.voltic.app.chain.ArbitrumClient
+import com.voltic.app.chain.explorer.EthPriceCache
 import com.voltic.app.chain.explorer.ExplorerClient
 import com.voltic.app.chain.explorer.TransactionRecord
+import com.voltic.app.ui.components.AmountInputField
 import com.voltic.app.ui.components.BalanceSkeleton
 import com.voltic.app.ui.components.CopyButton
 import com.voltic.app.ui.components.SettingsMenuContent
@@ -108,7 +109,7 @@ fun DashboardScreen(
     var isInitialLoading by remember { mutableStateOf(true) }
     var isRefreshing by remember { mutableStateOf(false) }
     var isBalanceVisible by remember { mutableStateOf(!walletManager.isBalanceHidden()) }
-
+    val ethPriceUsd by EthPriceCache.priceUsd.collectAsStateWithLifecycle()
     var activeAction by remember { mutableStateOf(DashboardAction.NONE) }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -349,17 +350,14 @@ fun DashboardScreen(
                                     }
                                 }
 
-                                OutlinedTextField(
+                                AmountInputField(
                                     value = amountInput,
                                     onValueChange = { newValue ->
                                         amountInput = AmountInputSanitizer.sanitizeCryptoAmount(input = newValue, fallback = amountInput)
                                         sendTxResult = null
                                     },
-                                    label = { Text("Amount (ETH)") },
                                     modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                    shape = RoundedCornerShape(16.dp)
+                                    ethPriceUsd = ethPriceUsd
                                 )
 
                                 OutlinedTextField(

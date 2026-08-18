@@ -4,11 +4,21 @@ import android.util.Log
 import com.voltic.app.BuildConfig
 import com.voltic.app.chain.ArbitrumClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.math.BigDecimal
+import kotlin.time.Duration.Companion.seconds
 
 class ExplorerClient {
 
@@ -87,5 +97,26 @@ class ExplorerClient {
      */
     fun getArbiscanUrl(txHash: String): String {
         return "https://sepolia.arbiscan.io/tx/$txHash"
+    }
+}
+
+// TODO: find a better place for it
+object EthPriceCache {
+    private val explorer = ExplorerClient()
+
+    private val _priceUsd = MutableStateFlow<BigDecimal?>(null)
+    val priceUsd: StateFlow<BigDecimal?> = _priceUsd.asStateFlow()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val started = AtomicBoolean(false)
+
+    fun startPolling() {
+        if (!started.compareAndSet(false, true)) return
+        scope.launch {
+            while (isActive) {
+                runCatching { explorer.getEthPrice() }.onSuccess { _priceUsd.value = it }
+                delay(60.seconds)
+            }
+        }
     }
 }

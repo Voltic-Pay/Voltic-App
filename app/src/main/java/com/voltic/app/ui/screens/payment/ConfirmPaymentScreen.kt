@@ -5,7 +5,6 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,7 +12,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
 import com.voltic.app.R
@@ -21,13 +19,14 @@ import com.voltic.app.chain.ArbitrumClient
 import com.voltic.app.payload.PaymentRequest
 import com.voltic.app.transport.nfc.NfcSession
 import com.voltic.app.ui.components.StatusBanner
-import com.voltic.app.ui.model.AmountInputSanitizer
 import com.voltic.app.wallet.WalletManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.voltic.app.chain.explorer.EthPriceCache
 import com.voltic.app.settings.SpendLimitPreferences
+import com.voltic.app.ui.components.AmountInputField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,6 +36,7 @@ fun ConfirmPaymentScreen(
     onPaymentSuccess: () -> Unit,
     onBack: () -> Unit
 ) {
+    val ethPriceUsd by EthPriceCache.priceUsd.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val chain = remember { ArbitrumClient() }
@@ -109,15 +109,12 @@ fun ConfirmPaymentScreen(
                         Column {
                             Text("Enter Amount (ETH)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(modifier = Modifier.height(8.dp))
-                            OutlinedTextField(
+                            AmountInputField(
                                 value = customAmountInput,
-                                onValueChange = { customAmountInput = AmountInputSanitizer.sanitizeCryptoAmount(input = it, fallback = customAmountInput) },
-                                label = { Text("Amount (ETH)") },
+                                onValueChange = { customAmountInput = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(20.dp),
-                                singleLine = true,
                                 enabled = !isSending && sendResult == null,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                                ethPriceUsd = ethPriceUsd
                             )
                         }
                     }

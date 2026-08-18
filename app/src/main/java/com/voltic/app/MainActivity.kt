@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.fragment.app.FragmentActivity
+import com.voltic.app.chain.explorer.EthPriceCache
 import com.voltic.app.settings.SpendLimitPreferences
 import com.voltic.app.transport.nfc.NfcReaderManager
 import com.voltic.app.ui.VolticApp
@@ -21,6 +22,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        EthPriceCache.startPolling()
 
         SpendLimitPreferences.init(this)
 

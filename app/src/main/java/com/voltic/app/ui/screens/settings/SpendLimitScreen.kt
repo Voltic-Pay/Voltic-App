@@ -23,7 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voltic.app.R
 import com.voltic.app.chain.ArbitrumClient
+import com.voltic.app.chain.explorer.EthPriceCache
 import com.voltic.app.settings.SpendLimitPreferences
+import com.voltic.app.ui.components.AmountInputField
 import com.voltic.app.ui.model.AmountInputSanitizer
 import com.voltic.app.ui.model.BalanceFormatter
 import com.voltic.app.wallet.WalletManager
@@ -40,6 +42,7 @@ fun SpendLimitScreen(
     val context = LocalContext.current
     val chain = remember { ArbitrumClient() }
     val spendLimitsEnabled by SpendLimitPreferences.isEnabled.collectAsStateWithLifecycle()
+    val ethPriceUsd by EthPriceCache.priceUsd.collectAsStateWithLifecycle()
 
     var limitAmountInput by remember { mutableStateOf("") }
     var managementAmountInput by remember { mutableStateOf("") }
@@ -184,15 +187,13 @@ fun SpendLimitScreen(
 
                         HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
 
-                        // CUSTOM MANAGEMENT (IN/OUT)
-                        OutlinedTextField(
+                        // CUSTOM MANAGEMENT (IN/OUT) — USD toggle enabled, deposit/withdraw is a real payment-like action
+                        AmountInputField(
                             value = managementAmountInput,
-                            onValueChange = { managementAmountInput = AmountInputSanitizer.sanitizeCryptoAmount(it, managementAmountInput) },
-                            label = { Text("Transfer Amount (ETH)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                            onValueChange = { managementAmountInput = it },
+                            ethPriceUsd = ethPriceUsd,
+                            label = "Transfer Amount (ETH)",
+                            enabled = !isUpdating
                         )
 
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -286,7 +287,9 @@ fun SpendLimitScreen(
                         }
                     }
 
-                    // Right: Limit Amount Input
+                    // Right: Limit Amount Input — deliberately ETH-only, no USD toggle.
+                    // This defines an on-chain rule denominated in ETH; converting it to a
+                    // fluctuating USD figure would misrepresent what's actually being set.
                     OutlinedTextField(
                         value = limitAmountInput,
                         onValueChange = { limitAmountInput = AmountInputSanitizer.sanitizeCryptoAmount(it, limitAmountInput) },
