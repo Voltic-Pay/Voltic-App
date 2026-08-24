@@ -11,6 +11,7 @@ data class QRPaymentRequest(
     /**
      * Converts request to a deep link URI string that any Android camera can open:
      * https://voltic-pay.github.io/pay?to=0x123...&amount=0.01&chainId=421614
+     * (Chain ID 421614 is Arbitrum Sepolia)
      * which will not work for now .... until implement it
      */
     fun toUri(): String {

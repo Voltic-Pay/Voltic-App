@@ -13,6 +13,7 @@ import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
+import com.voltic.app.chain.ArbitrumClient
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -57,7 +58,7 @@ import java.util.concurrent.Executors
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScanQrScreen(
-    expectedChainId: Long = 421614L,
+    expectedChainId: Long = ArbitrumClient.ARBITRUM_CHAIN_ID,
     onPaymentScanned: (QRPaymentRequest) -> Unit,
     onBack: () -> Unit,
 ) {

@@ -93,10 +93,10 @@ class ExplorerClient {
     }
 
     /**
-     * Returns the Arbiscan URL for a given transaction hash.
+     * Returns the explorer URL for a given transaction hash.
      */
     fun getArbiscanUrl(txHash: String): String {
-        return "https://sepolia.arbiscan.io/tx/$txHash"
+        return "${ArbitrumClient.EXPLORER_URL}/tx/$txHash"
     }
 }
 

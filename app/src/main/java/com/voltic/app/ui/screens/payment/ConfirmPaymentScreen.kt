@@ -95,7 +95,7 @@ fun ConfirmPaymentScreen(
 
                     Column {
                         Text("Network", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Arbitrum Sepolia (Chain ID ${paymentRequest.chainId})", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                        Text("${ArbitrumClient.ARBITRUM_CHAIN_NAME} (Chain ID ${paymentRequest.chainId})", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
                     }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

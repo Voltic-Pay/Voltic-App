@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import com.voltic.app.chain.ArbitrumClient
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -42,7 +43,7 @@ import kotlin.time.Duration.Companion.milliseconds
 fun GenerateReceiveScreen(
     currentAddress: String,
     walletManager: WalletManager,
-    chainId: Long = 421614L,
+    chainId: Long = ArbitrumClient.ARBITRUM_CHAIN_ID,
     onBack: () -> Unit
 ) {
     val activity = LocalContext.current as Activity
@@ -127,7 +128,7 @@ fun GenerateReceiveScreen(
             when (val state = readerState) {
                 is ReaderState.ProcessingTap1 -> StatusBanner("Customer tapped! Fetching network data...")
                 is ReaderState.WaitingForTap2 -> StatusBanner("Ready! Waiting for customer to authorize and Tap again...")
-                is ReaderState.Broadcasting -> StatusBanner("Broadcasting Transaction to Arbitrum...")
+                is ReaderState.Broadcasting -> StatusBanner("Broadcasting Transaction to ${ArbitrumClient.ARBITRUM_CHAIN_NAME}...")
                 is ReaderState.Success -> StatusBanner("Payment Received! Tx: ${state.txHash}", isSuccess = true)
                 is ReaderState.Error -> StatusBanner("Error: ${state.message}")
                 is ReaderState.WaitingForTap1 -> { }

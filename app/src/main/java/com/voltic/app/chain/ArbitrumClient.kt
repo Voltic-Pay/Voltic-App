@@ -29,13 +29,15 @@ import java.math.BigInteger
 class ArbitrumClient {
 
     companion object {
-        const val ARBITRUM_RPC_URL = "https://sepolia-rollup.arbitrum.io/rpc"
-        const val ARBITRUM_CHAIN_ID = 421614L
-        const val ENS_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com"
+        const val ARBITRUM_RPC_URL = "https://arb1.arbitrum.io/rpc"
+        const val ARBITRUM_CHAIN_ID = 42161L
+        const val ARBITRUM_CHAIN_NAME = "Arbitrum One"
+        const val EXPLORER_URL = "https://arbiscan.io"
+        const val ENS_RPC_URL = "https://eth.llamarpc.com"
 
         // Deployed Vault Address on Arbitrum Sepolia
-        const val VAULT_ADDRESS = "0x2EB9cD3C24C7cA7F7Eb7e563Be14C7Dd60504B6e"
-
+        //const val VAULT_ADDRESS = "0x2EB9cD3C24C7cA7F7Eb7e563Be14C7Dd60504B6e"
+        const val VAULT_ADDRESS = "0xb84b1abe962534917e9f5f7945315f309cd36fa4"  // real contract
         val web3j: Web3j by lazy { Web3j.build(HttpService(ARBITRUM_RPC_URL)) }
         val ensWeb3j: Web3j by lazy { Web3j.build(HttpService(ENS_RPC_URL)) }
         val txMutex = Mutex()
