@@ -21,30 +21,17 @@ forge script script/Deploy.s.sol -r https://sepolia-rollup.arbitrum.io/rpc
 
 ```
 if you are ready to deoply to a real chain add `--broadcast`
+then you will generate the wraper interface for java:
 ```
-jq '.abi' out/VolticFactory.sol/VolticFactory.json > VolticFactory.abi
-
-jq -r '.bytecode.object' out/VolticFactory.sol/VolticFactory.json | sed 's/^0x//' > VolticFactory.bin
-
+jq '.abi' out/VolticSmartWallet.sol/VolticSmartWallet.json > VolticSmartWallet.abi
+jq -r '.bytecode.object' out/VolticSmartWallet.sol/VolticSmartWallet.json | sed 's/^0x//' > VolticSmartWallet.bin
 
 web3j generate solidity \
-  -a VolticFactory.abi \
-  -b VolticFactory.bin \
+  -a VolticSmartWallet.abi \
+  -b VolticSmartWallet.bin \
   -o ../app/src/main/java \
   -p com.voltic.contracts
 
-
-```
-and same for the other file
-```
-jq '.abi' out/VolticWallet.sol/VolticWallet.json > VolticWallet.abi
-jq -r '.bytecode.object' out/VolticWallet.sol/VolticWallet.json | sed 's/^0x//' > VolticWallet.bin
-
-web3j generate solidity \
-  -a VolticWallet.abi \
-  -b VolticWallet.bin \
-  -o ../app/src/main/java \
-  -p com.voltic.contracts
 ```
 
 this will produce a java files with it you can interact to the contract

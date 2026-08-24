@@ -84,6 +84,7 @@ contract VolticSmartWalletTest is Test {
         vm.expectRevert(VolticSmartWallet.SpendLimitExceeded.selector);
         vault.executePayment(alice, merchant, 0.5 ether, nonce, deadline, sig2);
 
+        vm.prank(alice);
         vault.setSpendLimit(VolticSmartWallet.LimitPeriod.Daily, 1 ether);
 
         bytes memory sig3 = _signVaultPayment(alicePk, alice, merchant, 0.6 ether, nonce, deadline);
