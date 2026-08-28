@@ -57,7 +57,7 @@ object BalanceFormatter {
 
         return if (leadingZeros >= 3) {
             // Use subscript notation: 0.0{count}{remaining}
-            // leadingZeros is total zeros after dot. 
+            // leadingZeros is total zeros after dot.
             // 0.00000123 -> leadingZeros = 5.
             // We show 0.0, then subscript 5, then significant digits.
             val significantPart = stripped.unscaledValue().toString()

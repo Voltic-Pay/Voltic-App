@@ -271,7 +271,7 @@ fun DashboardScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
                     // 2. QUICK ACTION GRID
                     Row(
@@ -466,8 +466,22 @@ fun BalanceCard(label: String, state: BalanceUiState, isVisible: Boolean, onTogg
                     else -> Text("...")
                 }
             }
-            FilledTonalIconButton(onClick = onToggleVisibility) {
-                Icon(painter = painterResource(id = if (isVisible) R.drawable.ic_hide else R.drawable.ic_show), contentDescription = null)
+            if (isVisible) {
+                IconButton(onClick = onToggleVisibility) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_hide),
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            } else {
+                FilledTonalIconButton(onClick = onToggleVisibility) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_show),
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         }
     }
