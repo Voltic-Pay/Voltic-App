@@ -1,5 +1,6 @@
 package com.voltic.app.chain
 
+import android.util.Log
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import com.voltic.contracts.VolticSmartWallet
@@ -25,19 +26,18 @@ import org.web3j.utils.Convert
 import org.web3j.utils.Numeric
 import java.math.BigDecimal
 import java.math.BigInteger
+import com.voltic.app.BuildConfig
+import org.web3j.protocol.core.methods.request.Transaction
 
 class ArbitrumClient {
 
     companion object {
-        const val ARBITRUM_RPC_URL = "https://arb1.arbitrum.io/rpc"
-        const val ARBITRUM_CHAIN_ID = 42161L
-        const val ARBITRUM_CHAIN_NAME = "Arbitrum One"
-        const val EXPLORER_URL = "https://arbiscan.io"
-        const val ENS_RPC_URL = "https://eth.llamarpc.com"
-
-        // Deployed Vault Address on Arbitrum Sepolia
-        //const val VAULT_ADDRESS = "0x2EB9cD3C24C7cA7F7Eb7e563Be14C7Dd60504B6e"
-        const val VAULT_ADDRESS = "0xb84b1abe962534917e9f5f7945315f309cd36fa4"  // real contract
+        const val ARBITRUM_RPC_URL = BuildConfig.ARBITRUM_RPC_URL
+        val ARBITRUM_CHAIN_ID: Long = BuildConfig.ARBITRUM_CHAIN_ID
+        const val ARBITRUM_CHAIN_NAME = BuildConfig.ARBITRUM_CHAIN_NAME
+        const val EXPLORER_URL = BuildConfig.EXPLORER_URL
+        const val ENS_RPC_URL = BuildConfig.ENS_RPC_URL
+        const val VAULT_ADDRESS = BuildConfig.VAULT_ADDRESS
         val web3j: Web3j by lazy { Web3j.build(HttpService(ARBITRUM_RPC_URL)) }
         val ensWeb3j: Web3j by lazy { Web3j.build(HttpService(ENS_RPC_URL)) }
         val txMutex = Mutex()
@@ -77,20 +77,20 @@ class ArbitrumClient {
     ): BigInteger = withContext(Dispatchers.IO) {
         try {
             val response = web3j.ethEstimateGas(
-                org.web3j.protocol.core.methods.request.Transaction.createFunctionCallTransaction(
+                Transaction.createFunctionCallTransaction(
                     from, null, null, null, to, value, data
                 )
             ).send()
 
             if (response.hasError()) {
-                android.util.Log.w("ArbitrumClient", "Gas estimate error: ${response.error.message}, using fallback")
+                Log.w("ArbitrumClient", "Gas estimate error: ${response.error.message}, using fallback")
                 return@withContext fallback
             }
 
             // 20% buffer
             response.amountUsed.multiply(BigInteger.valueOf(12)).divide(BigInteger.valueOf(10))
         } catch (e: Exception) {
-            android.util.Log.e("ArbitrumClient", "Gas estimation failed, using fallback", e)
+            Log.e("ArbitrumClient", "Gas estimation failed, using fallback", e)
             fallback
         }
     }
@@ -102,7 +102,7 @@ class ArbitrumClient {
             val bufferedPrice = baseGasPrice.multiply(BigInteger.valueOf(12)).divide(BigInteger.valueOf(10))
             StaticGasProvider(bufferedPrice, gasLimit)
         } catch (e: Exception) {
-            android.util.Log.e("ArbitrumClient", "Gas price fetch failed, using fallback", e)
+            Log.e("ArbitrumClient", "Gas price fetch failed, using fallback", e)
             // Safe fallback to 0.1 Gwei if RPC node fails to return gas price
             StaticGasProvider(BigInteger.valueOf(100_000_000), gasLimit)
         }

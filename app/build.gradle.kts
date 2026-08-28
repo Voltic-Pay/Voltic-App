@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.voltic.app"
     compileSdk = 36
-    
+
     defaultConfig {
         applicationId = "com.voltic.app"
         minSdk = 26
@@ -21,13 +21,39 @@ android {
 
 
     }
+    flavorDimensions += "network"
 
+    productFlavors {
+        create("sepolia") {
+            dimension = "network"
+            applicationIdSuffix = ".sepolia"
+            versionNameSuffix = "-sepolia"
+
+            buildConfigField("String", "ARBITRUM_RPC_URL", "\"https://sepolia-rollup.arbitrum.io/rpc\"")
+            buildConfigField("Long", "ARBITRUM_CHAIN_ID", "421614L")
+            buildConfigField("String", "ARBITRUM_CHAIN_NAME", "\"Arbitrum Sepolia\"")
+            buildConfigField("String", "EXPLORER_URL", "\"https://sepolia.arbiscan.io\"")
+            buildConfigField("String", "ENS_RPC_URL", "\"https://eth.llamarpc.com\"")
+            buildConfigField("String", "VAULT_ADDRESS", "\"0x2EB9cD3C24C7cA7F7Eb7e563Be14C7Dd60504B6e\"")
+        }
+
+        create("mainnet") {
+            dimension = "network"
+
+            buildConfigField("String", "ARBITRUM_RPC_URL", "\"https://arb1.arbitrum.io/rpc\"")
+            buildConfigField("Long", "ARBITRUM_CHAIN_ID", "42161L")
+            buildConfigField("String", "ARBITRUM_CHAIN_NAME", "\"Arbitrum One\"")
+            buildConfigField("String", "EXPLORER_URL", "\"https://arbiscan.io\"")
+            buildConfigField("String", "ENS_RPC_URL", "\"https://eth.llamarpc.com\"")
+            buildConfigField("String", "VAULT_ADDRESS", "\"0xb84b1abe962534917e9f5f7945315f309cd36fa4\"")
+        }
+    }
     buildTypes {
         release {
 
             isMinifyEnabled = true
             isShrinkResources = true
-            
+
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
