@@ -193,7 +193,7 @@ fun ConfirmPaymentScreen(
                                         sendResult = "Success! Tx: $txHash"
                                     } catch (e: Exception) {
                                         Log.e("ConfirmPayment", "Payment failed", e)
-                                        val displayMsg = ArbitrumClient.formatError(e.message)
+                                        val displayMsg = ArbitrumClient.formatError(e)
                                         sendResult = "Payment Failed: $displayMsg"
                                     } finally {
                                         isSending = false

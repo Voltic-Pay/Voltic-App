@@ -63,12 +63,26 @@ class ArbitrumClient {
         private var currentArbRpcIndex = 0
         private var currentEnsRpcIndex = 0
 
-        fun formatError(message: String?): String {
-            val msg = message ?: return "Unknown error"
-            return if (msg.contains("0x0") && msg.contains("revert", ignoreCase = true)) {
-                "sender have reched maxiumim spending limit or have no funds"
+        fun formatError(e: Throwable): String {
+            val message = e.message ?: "Unknown error"
+
+            // 1. Try to decode as a Vault custom error or standard revert from the message
+            VaultErrorDecoder.decode(message)?.let { return it }
+
+            // 2. If it's a TransactionException, the reason might be in the receipt
+            if (e is org.web3j.protocol.exceptions.TransactionException) {
+                val receipt = if (e.transactionReceipt.isPresent) e.transactionReceipt.get() else null
+                receipt?.revertReason?.let { reason ->
+                    VaultErrorDecoder.decode(reason)?.let { return it }
+                }
+            }
+
+            // 3. Fallback to existing manual patterns or the raw message
+            val msg = message.lowercase()
+            return if (msg.contains("0x0") && msg.contains("revert")) {
+                "Sender has reached maximum spending limit or has no funds."
             } else {
-                msg
+                message
             }
         }
 

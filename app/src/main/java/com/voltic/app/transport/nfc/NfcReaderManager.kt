@@ -135,7 +135,7 @@ class NfcReaderManager(
                                 updateState(ReaderState.Success(txHash))
                             } catch (e: Exception) {
                                 Log.e(TAG, "Vault broadcast failed", e)
-                                updateState(ReaderState.Error("Broadcast failed: ${ArbitrumClient.formatError(e.message)}"))
+                                updateState(ReaderState.Error("Broadcast failed: ${ArbitrumClient.formatError(e)}"))
                             }
                         }
                     } else {
@@ -149,7 +149,7 @@ class NfcReaderManager(
                                 updateState(ReaderState.Success(txHash))
                             } catch (e: Exception) {
                                 Log.e(TAG, "Legacy broadcast failed", e)
-                                updateState(ReaderState.Error("Broadcast failed: ${ArbitrumClient.formatError(e.message)}"))
+                                updateState(ReaderState.Error("Broadcast failed: ${ArbitrumClient.formatError(e)}"))
                             }
                         }
                     }
