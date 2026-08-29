@@ -8,7 +8,10 @@ lifecycleRuntimeKtx = "2.6.1"
 activityCompose = "1.8.0"
 kotlin = "2.4.10"
 composeBom = "2026.02.01"
-web3j = "6.0.0"
+web3j = "5.0.2"
+jackson = "2.18.9"
+netty = "4.1.112.Final"
+commonsLang3 = "3.18.0"
 jetpackSecurity = "1.1.0"
 kotlinxCoroutines = "1.11.0"
 navigationCompose = "2.8.8"
@@ -17,6 +20,10 @@ camerax = "1.3.4"
 kotlinxSerialization = "1.11.0"
 secretsPlugin = "2.0.1"
 biometric = "1.1.0"
+desugarJdkLibs = "2.1.5"
+ensNormalize = "0.3.1"
+okhttp = "4.12.0"
+rxjava = "2.2.21"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -34,7 +41,13 @@ androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 web3j-core = { group = "org.web3j", name = "core", version.ref = "web3j" }
+web3j-abi = { group = "org.web3j", name = "abi", version.ref = "web3j" }
+web3j-utils = { group = "org.web3j", name = "utils", version.ref = "web3j" }
 web3j-crypto = { group = "org.web3j", name = "crypto", version.ref = "web3j" }
+web3j-tuples = { group = "org.web3j", name = "tuples", version.ref = "web3j" }
+ens-normalize = { group = "io.github.adraffy", name = "ens-normalize", version.ref = "ensNormalize" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+rxjava2 = { group = "io.reactivex.rxjava2", name = "rxjava", version.ref = "rxjava" }
 jetpack-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "jetpackSecurity" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
@@ -44,6 +57,10 @@ camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", versi
 camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
+android-desugarJdkLibs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
+jackson-databind = { group = "com.fasterxml.jackson.core", name = "jackson-databind", version.ref = "jackson" }
+netty-handler = { group = "io.netty", name = "netty-handler", version.ref = "netty" }
+commons-lang3 = { group = "org.apache.commons", name = "commons-lang3", version.ref = "commonsLang3" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -5,6 +5,20 @@ plugins {
     alias(libs.plugins.secrets.gradle.plugin)
 }
 
+configurations.all {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "com.fasterxml.jackson.core") {
+            useVersion(libs.versions.jackson.get())
+        }
+        if (requested.group == "io.netty") {
+            useVersion(libs.versions.netty.get())
+        }
+        if (requested.group == "org.apache.commons" && requested.name == "commons-lang3") {
+            useVersion(libs.versions.commonsLang3.get())
+        }
+    }
+}
+
 android {
     namespace = "com.voltic.app"
     compileSdk = 36
@@ -65,8 +79,9 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
     buildFeatures {
         compose = true
@@ -74,19 +89,22 @@ android {
     }
     packaging {
         resources {
-            excludes += "META-INF/FastDoubleParser-LICENSE"
-            excludes += "META-INF/INDEX.LIST"
-            excludes += "META-INF/FastDoubleParser-NOTICE"
-            excludes += "META-INF/io.netty.versions.properties"
+            excludes += "META-INF/DISCLAIMER"
+            excludes += "META-INF/LICENSE*"
+            excludes += "META-INF/NOTICE*"
             excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/io.netty.versions.properties"
+            excludes += "META-INF/FastDoubleParser-LICENSE"
+            excludes += "META-INF/FastDoubleParser-NOTICE"
+            excludes += "META-INF/INDEX.LIST"
             excludes += "META-INF/thirdparty-LICENSE"
-
-
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         }
     }
 }
 
 dependencies {
+    coreLibraryDesugaring(libs.android.desugarJdkLibs)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
@@ -97,7 +115,13 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.web3j.crypto)
+    implementation(libs.web3j.abi)
+    implementation(libs.web3j.utils)
+    implementation(libs.web3j.tuples)
     implementation(libs.web3j.core)
+    implementation(libs.ens.normalize)
+    implementation(libs.okhttp)
+    implementation(libs.rxjava2)
     implementation(libs.jetpack.security.crypto)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.zxing.core)
