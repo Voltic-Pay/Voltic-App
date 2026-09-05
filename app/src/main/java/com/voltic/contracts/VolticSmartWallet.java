@@ -12,7 +12,7 @@ import org.web3j.abi.EventEncoder;
 import org.web3j.abi.TypeReference;
 import org.web3j.abi.datatypes.Address;
 import org.web3j.abi.datatypes.Bool;
-import org.web3j.abi.datatypes.CustomError;
+
 import org.web3j.abi.datatypes.DynamicArray;
 import org.web3j.abi.datatypes.Event;
 import org.web3j.abi.datatypes.Function;
@@ -103,69 +103,7 @@ public class VolticSmartWallet extends Contract {
             Arrays.<TypeReference<?>>asList(new TypeReference<Address>(true) {}, new TypeReference<Uint256>() {}));
     ;
 
-    public static final CustomError DEADLINETOOFARINFUTURE_ERROR = new CustomError("DeadlineTooFarInFuture", 
-            Arrays.<TypeReference<?>>asList());
-    ;
 
-    public static final CustomError ECDSAINVALIDSIGNATURE_ERROR = new CustomError("ECDSAInvalidSignature", 
-            Arrays.<TypeReference<?>>asList());
-    ;
-
-    public static final CustomError ECDSAINVALIDSIGNATURELENGTH_ERROR = new CustomError("ECDSAInvalidSignatureLength", 
-            Arrays.<TypeReference<?>>asList(new TypeReference<Uint256>() {}));
-    ;
-
-    public static final CustomError ECDSAINVALIDSIGNATURES_ERROR = new CustomError("ECDSAInvalidSignatureS", 
-            Arrays.<TypeReference<?>>asList(new TypeReference<Bytes32>() {}));
-    ;
-
-    public static final CustomError EXPIREDDEADLINE_ERROR = new CustomError("ExpiredDeadline", 
-            Arrays.<TypeReference<?>>asList());
-    ;
-
-    public static final CustomError INSUFFICIENTBALANCE_ERROR = new CustomError("InsufficientBalance", 
-            Arrays.<TypeReference<?>>asList());
-    ;
-
-    public static final CustomError INVALIDSHORTSTRING_ERROR = new CustomError("InvalidShortString", 
-            Arrays.<TypeReference<?>>asList());
-    ;
-
-    public static final CustomError INVALIDSIGNATURE_ERROR = new CustomError("InvalidSignature", 
-            Arrays.<TypeReference<?>>asList());
-    ;
-
-    public static final CustomError INVALIDTOADDRESS_ERROR = new CustomError("InvalidToAddress", 
-            Arrays.<TypeReference<?>>asList());
-    ;
-
-    public static final CustomError NONCEALREADYUSED_ERROR = new CustomError("NonceAlreadyUsed", 
-            Arrays.<TypeReference<?>>asList());
-    ;
-
-    public static final CustomError REENTRANCYGUARDREENTRANTCALL_ERROR = new CustomError("ReentrancyGuardReentrantCall", 
-            Arrays.<TypeReference<?>>asList());
-    ;
-
-    public static final CustomError SPENDLIMITEXCEEDED_ERROR = new CustomError("SpendLimitExceeded", 
-            Arrays.<TypeReference<?>>asList());
-    ;
-
-    public static final CustomError STRINGTOOLONG_ERROR = new CustomError("StringTooLong", 
-            Arrays.<TypeReference<?>>asList(new TypeReference<Utf8String>() {}));
-    ;
-
-    public static final CustomError WALLETDISABLED_ERROR = new CustomError("WalletDisabled", 
-            Arrays.<TypeReference<?>>asList());
-    ;
-
-    public static final CustomError ZEROADDRESS_ERROR = new CustomError("ZeroAddress", 
-            Arrays.<TypeReference<?>>asList());
-    ;
-
-    public static final CustomError ZEROAMOUNT_ERROR = new CustomError("ZeroAmount", 
-            Arrays.<TypeReference<?>>asList());
-    ;
 
     @Deprecated
     protected VolticSmartWallet(String contractAddress, Web3j web3j, Credentials credentials,

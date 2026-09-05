@@ -244,15 +244,15 @@ fun DashboardScreen(
                             limitInfo =currentLimitInfo ,
                         )
                         address?.let { currentAddr ->
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
                             Surface(
-                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-                                shape = CircleShape
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                shape = RoundedCornerShape(24.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                    modifier = Modifier.padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     val shortAddr = if (currentAddr.length > 13) {
                                         "${currentAddr.take(8)}...${currentAddr.takeLast(5)}"
@@ -261,11 +261,17 @@ fun DashboardScreen(
                                     }
                                     Text(
                                         text = shortAddr,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = FontWeight.SemiBold
                                     )
-                                    CopyButton(textToCopy = currentAddr, toastMessage = "Address copied!")
+                                    CopyButton(
+                                        textToCopy = currentAddr,
+                                        toastMessage = "Address copied!",
+                                        useCompactSize = true,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(32.dp)
+                                    )
                                 }
                             }
                         }

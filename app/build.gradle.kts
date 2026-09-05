@@ -42,6 +42,7 @@ android {
             dimension = "network"
             applicationIdSuffix = ".sepolia"
             versionNameSuffix = "-sepolia"
+            isDefault = true
         }
 
         create("mainnet") {

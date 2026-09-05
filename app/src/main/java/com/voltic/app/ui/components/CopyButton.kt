@@ -5,8 +5,10 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,26 +31,37 @@ fun CopyButton(
     modifier: Modifier = Modifier,
     toastMessage: String = "Copied to clipboard!",
     tint: Color = MaterialTheme.colorScheme.primary,
-    iconSize: Dp = 18.dp
+    iconSize: Dp = 18.dp,
+    useCompactSize: Boolean = false
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
 
-    IconButton(
-        onClick = {
-            scope.launch {
-                clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Copied Text", textToCopy)))
-                Toast.makeText(context, toastMessage, Toast.LENGTH_SHORT).show()
-            }
-        },
-        modifier = modifier
-    ) {
-        Icon(
-            painter = painterResource(id = R.drawable.ic_copy),
-            contentDescription = "Copy",
-            tint = tint,
-            modifier = Modifier.size(iconSize)
-        )
+    val content = @Composable {
+        IconButton(
+            onClick = {
+                scope.launch {
+                    clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Copied Text", textToCopy)))
+                    Toast.makeText(context, toastMessage, Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = modifier
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_copy),
+                contentDescription = "Copy",
+                tint = tint,
+                modifier = Modifier.size(iconSize)
+            )
+        }
+    }
+
+    if (useCompactSize) {
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+            content()
+        }
+    } else {
+        content()
     }
 }

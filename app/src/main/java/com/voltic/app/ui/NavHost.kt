@@ -1,5 +1,10 @@
 package com.voltic.app.ui
 
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -59,6 +64,13 @@ private fun NavController.popBackStackSafely() {
         popBackStack()
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// EXPRESSIVE MOTION CONSTANTS
+// Following Material 3 "Emphasized" motion guidelines.
+// ─────────────────────────────────────────────────────────────────────────
+private val EmphasizedEasing = CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f)
+private const val TransitionDuration = 500
 
 @Composable
 fun VolticApp(
@@ -134,7 +146,31 @@ fun VolticApp(
 
             NavHost(
                 navController = navController,
-                startDestination = startDestination
+                startDestination = startDestination,
+                enterTransition = {
+                    slideIntoContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                        animationSpec = tween(TransitionDuration, easing = EmphasizedEasing)
+                    ) + fadeIn(animationSpec = tween(TransitionDuration))
+                },
+                exitTransition = {
+                    slideOutOfContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                        animationSpec = tween(TransitionDuration, easing = EmphasizedEasing)
+                    ) + fadeOut(animationSpec = tween(TransitionDuration))
+                },
+                popEnterTransition = {
+                    slideIntoContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.End,
+                        animationSpec = tween(TransitionDuration, easing = EmphasizedEasing)
+                    ) + fadeIn(animationSpec = tween(TransitionDuration))
+                },
+                popExitTransition = {
+                    slideOutOfContainer(
+                        towards = AnimatedContentTransitionScope.SlideDirection.End,
+                        animationSpec = tween(TransitionDuration, easing = EmphasizedEasing)
+                    ) + fadeOut(animationSpec = tween(TransitionDuration))
+                }
             ) {
                 composable(Screen.Welcome.route) {
                     WelcomeScreen(
