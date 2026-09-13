@@ -2,7 +2,6 @@ package com.voltic.app.chain
 
 import android.util.Log
 import com.voltic.contracts.VolticSmartWallet
-import io.github.adraffy.ens.ENSNormalize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -16,7 +15,6 @@ import org.web3j.abi.datatypes.Function
 import org.web3j.abi.datatypes.generated.Bytes32
 import org.web3j.abi.datatypes.generated.Uint256
 import org.web3j.crypto.*
-import org.web3j.ens.EnsResolver
 import org.web3j.protocol.Web3j
 import org.web3j.protocol.core.DefaultBlockParameterName
 import org.web3j.protocol.core.methods.request.Transaction
@@ -61,7 +59,6 @@ class ArbitrumClient {
         // firing off balance + spend-limit + nonce at once) can't race each other.
         private val indexLock = Mutex()
         private var currentArbRpcIndex = 0
-        private var currentEnsRpcIndex = 0
 
         fun formatError(e: Throwable): String {
             val message = e.message ?: "Unknown error"
@@ -113,7 +110,6 @@ class ArbitrumClient {
                 val isKnownFlaky = e is ClientConnectionException ||
                         e is ConnectException ||
                         e is SocketTimeoutException ||
-                        e is org.web3j.ens.EnsResolutionException ||
                         e.message?.contains("521") == true ||
                         e.message?.contains("429") == true ||
                         e.message?.contains("sync status") == true
@@ -148,8 +144,6 @@ class ArbitrumClient {
     private suspend fun <T> runArb(block: suspend (Web3j) -> T): T =
         runWithFallback(config.arbitrumRpcs, Companion::currentArbRpcIndex, block)
 
-    private suspend fun <T> runEns(block: suspend (Web3j) -> T): T =
-        runWithFallback(config.ethereumRpcs, Companion::currentEnsRpcIndex, block)
 
     // --- Clean Data Class for NFC prep ---
     data class OfflinePaymentParams(
@@ -218,19 +212,13 @@ class ArbitrumClient {
         vault.nonces(address).send() ?: BigInteger.ZERO
     }
 
-    suspend fun getReceiverAddress(rawRecipient: String): String {
-        val normalizedRecipient = rawRecipient.trim()
-        if (normalizedRecipient.endsWith(".eth", ignoreCase = true)) {
-            return runEns { ensWeb3j ->
-                val address = EnsResolver(ensWeb3j, Long.MAX_VALUE).resolve(ENSNormalize.ENSIP15.normalize(normalizedRecipient))
-                require(!address.isNullOrEmpty() && address != "0x0000000000000000000000000000000000000000") {
-                    "Invalid ENS name"
-                }
-                address
-            }
-        }
-        return normalizedRecipient
-    }
+    // Delegates to the standalone EnsResolver (same package) — it pulls
+    // config.ethereumRpcs itself and throws EnsResolutionException on any
+    // failure (invalid name, no resolver, unregistered). Callers further up
+    // (send-flow UI) should catch EnsResolutionException specifically to
+    // show a clean message instead of a generic error.
+    suspend fun getReceiverAddress(rawRecipient: String): String =
+        EnsResolver.getReceiverAddress(rawRecipient)
 
     suspend fun getOfflinePaymentParams(
         customerAddress: String,
