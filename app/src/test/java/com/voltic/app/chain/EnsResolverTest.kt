@@ -31,28 +31,17 @@ class EnsResolverTest {
     }
 
     @Test
-    fun testResolve_liveOrNetworkException() = runBlocking {
-        try {
-            val address = EnsResolver.resolve("vitalik.eth")
-            assertEquals("0xd8da6bf26964af9d7eed9e03e53415d37aa96045", address.lowercase())
-        } catch (e: EnsResolutionException) {
-            // Allowed if offline or RPC endpoints are down/throttled
-            assertTrue(e.message?.contains("All mainnet RPCs failed") == true || e.message?.contains("RPC HTTP") == true)
-        } catch (_: java.io.IOException) {
-            // Allowed for network timeout/issues
-        }
+    fun testResolve_live() = runBlocking {
+        // This test requires internet access and valid RPCs in ChainConfig
+        val address = EnsResolver.resolve("vitalik.eth")
+        assertEquals("0xd8da6bf26964af9d7eed9e03e53415d37aa96045", address.lowercase())
     }
 
     @Test
     fun testResolve_withCaseAndWhitespace() = runBlocking {
-        try {
-            // " VITALIK.eth " should normalize to "vitalik.eth"
-            val address = EnsResolver.resolve(" VITALIK.eth ")
-            assertEquals("0xd8da6bf26964af9d7eed9e03e53415d37aa96045", address.lowercase())
-        } catch (e: EnsResolutionException) {
-            assertTrue(e.message?.contains("All mainnet RPCs failed") == true || e.message?.contains("RPC HTTP") == true)
-        } catch (_: java.io.IOException) {
-        }
+        // " VITALIK.eth " should normalize to "vitalik.eth"
+        val address = EnsResolver.resolve(" VITALIK.eth ")
+        assertEquals("0xd8da6bf26964af9d7eed9e03e53415d37aa96045", address.lowercase())
     }
 
     @Test

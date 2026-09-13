@@ -4,6 +4,7 @@ import io.github.adraffy.ens.ENSNormalize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.bouncycastle.jcajce.provider.digest.Keccak
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -93,13 +94,13 @@ object EnsResolver {
             put("method", "eth_call")
             put(
                 "params",
-                listOf(
-                    JSONObject().apply {
+                JSONArray().apply {
+                    put(JSONObject().apply {
                         put("to", to)
                         put("data", data)
-                    },
-                    "latest"
-                )
+                    })
+                    put("latest")
+                }
             )
         }
 
