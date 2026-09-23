@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.secrets.gradle.plugin)
+    id("io.kriptal.ethers.abigen-plugin") version "2.0.1"
 }
 
 configurations.all {
@@ -94,6 +95,12 @@ dependencies {
     coreLibraryDesugaring(libs.android.desugarJdkLibs)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
+    implementation(libs.ethers.core)
+    implementation(libs.ethers.abi)
+    implementation(libs.ethers.bom)
+    implementation(libs.ethers.signers)
+    implementation(libs.ethers.providers)
+    implementation(libs.ethers.abigen)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
@@ -133,4 +140,23 @@ dependencies {
 }
 secrets {
     defaultPropertiesFileName = "local.properties"
+}
+ethersAbigen {
+    // set by default
+    directorySource("../contracts/abi")
+
+    // set by default
+    outputDir = "contracts"
+
+}
+val forgeBuild = tasks.register<Exec>("forgeBuild") {
+    workingDir = file("../contracts")
+    commandLine("forge", "build")
+
+    inputs.dir("../contracts/src")
+    outputs.dir("../contracts/out")
+}
+
+tasks.named("ethersAbigen") {
+    dependsOn(forgeBuild)
 }
