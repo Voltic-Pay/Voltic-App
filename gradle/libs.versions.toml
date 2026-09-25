@@ -48,13 +48,15 @@ web3j-abi = { group = "org.web3j", name = "abi", version.ref = "web3j" }
 web3j-utils = { group = "org.web3j", name = "utils", version.ref = "web3j" }
 web3j-crypto = { group = "org.web3j", name = "crypto", version.ref = "web3j" }
 web3j-tuples = { group = "org.web3j", name = "tuples", version.ref = "web3j" }
-ethers-bom = { group = "io.kriptal.ethers", name = "ethers-bom", version.ref = "ethers" }
-ethers-abi = { group = "io.kriptal.ethers", name = "ethers-abi", version.ref = "ethers" }
-ethers-core = { group = "io.kriptal.ethers", name = "ethers-core", version.ref = "ethers" }
-ethers-providers = { group = "io.kriptal.ethers", name = "ethers-providers", version.ref = "ethers" }
-ethers-signers = { group = "io.kriptal.ethers", name = "ethers-signers", version.ref = "ethers" }
-ethers-abigen-plugin = { group = "io.kriptal.ethers", name = "ethers-abigen-plugin", version.ref = "ethers" }
-ethers-abigen = { group = "io.kriptal.ethers", name = "ethers-abigen", version.ref = "ethers" }
+ethers-bom = { module = "io.kriptal.ethers:ethers-bom", version.ref = "ethers" }
+ethers-core = { module = "io.kriptal.ethers:ethers-core" }
+ethers-abi = { module = "io.kriptal.ethers:ethers-abi" }
+ethers-providers = { module = "io.kriptal.ethers:ethers-providers" }
+ethers-signers = { module = "io.kriptal.ethers:ethers-signers" }
+ethers-abigen = { module = "io.kriptal.ethers:ethers-abigen" }
+ethers-crypto = { module = "io.kriptal.ethers:ethers-crypto" }
+ethers-ens = { module = "io.kriptal.ethers:ethers-ens" }
+ethers-rlp = { module = "io.kriptal.ethers:ethers-rlp" }
 ens-normalize = { group = "io.github.adraffy", name = "ens-normalize", version.ref = "ensNormalize" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 rxjava2 = { group = "io.reactivex.rxjava2", name = "rxjava", version.ref = "rxjava" }

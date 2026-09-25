@@ -238,7 +238,7 @@ fun VolticApp(
                     var activeAddress by remember { mutableStateOf<String?>(null) }
 
                     LaunchedEffect(Unit) {
-                        val credentials = walletManager.loadExistingWalletAsync()
+                        val credentials = walletManager.loadExistingCredentialsAsync()
                         activeAddress = credentials?.address
                     }
 

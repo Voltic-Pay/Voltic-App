@@ -56,7 +56,7 @@ fun GenerateReceiveScreen(
     var merchantCredentials by remember { mutableStateOf<Credentials?>(null) }
 
     LaunchedEffect(Unit) {
-        merchantCredentials = walletManager.loadExistingWalletAsync()
+        merchantCredentials = walletManager.loadExistingCredentialsAsync()
     }
 
     DisposableEffect(Unit) {

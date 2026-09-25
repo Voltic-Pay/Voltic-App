@@ -97,7 +97,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.ethers.core)
     implementation(libs.ethers.abi)
-    implementation(libs.ethers.bom)
+    implementation(platform (libs.ethers.bom))
     implementation(libs.ethers.signers)
     implementation(libs.ethers.providers)
     implementation(libs.ethers.abigen)

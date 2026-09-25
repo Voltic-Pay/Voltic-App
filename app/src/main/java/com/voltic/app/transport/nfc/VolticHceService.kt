@@ -51,7 +51,7 @@ class VolticHceService : HostApduService() {
             launchConfirmationActivity()
             awaitingSecondTap = true
 
-            val creds = WalletManager(this).loadExistingWallet()
+            val creds = WalletManager(this).loadExistingCredentials()
                 ?: throw IllegalStateException("No Wallet")
 
             Log.d(TAG, "Sending back public address: ${creds.address}")
@@ -85,7 +85,7 @@ class VolticHceService : HostApduService() {
             val gasLimit = BigInteger(parts[3])
             Log.d(TAG, "Parsed vaultNonce: $vaultNonce, eoaNonce: $eoaNonce, gasPrice: $gasPrice, gasLimit:$gasLimit")
 
-            val creds = WalletManager(this).loadExistingWallet()!!
+            val creds = WalletManager(this).loadExistingCredentials()!!
             val request = NfcSession.pendingRequest.value!!
 
             if (NfcSession.useVault) {
