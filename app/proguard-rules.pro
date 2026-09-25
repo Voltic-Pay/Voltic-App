@@ -39,3 +39,12 @@
 -keep,allowobfuscation,allowshrinking class org.web3j.abi.TypeReference
 -keep class org.web3j.abi.datatypes.** { *; }
 -keepattributes Signature, Exceptions, *Annotation*, InnerClasses, EnclosingMethod
+
+# Suppress warnings for missing optional JVM/library dependencies
+-dontwarn aQute.bnd.annotation.spi.ServiceConsumer
+-dontwarn aQute.bnd.annotation.spi.ServiceProvider
+-dontwarn java.lang.management.ManagementFactory
+-dontwarn javax.management.**
+-dontwarn javax.naming.**
+-dontwarn javax.script.**
+-dontwarn org.osgi.framework.**
