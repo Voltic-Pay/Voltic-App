@@ -3,7 +3,7 @@ package com.voltic.app.transport.nfc
 import android.nfc.tech.IsoDep
 import android.util.Log
 import com.voltic.app.payload.NFCPaymentRequest
-import org.web3j.utils.Numeric
+import io.ethers.core.FastHex
 import java.math.BigInteger
 
 object ApduTransceiver {
@@ -66,6 +66,6 @@ object ApduTransceiver {
 
         val rawTxBytes = response.dropLast(2).toByteArray()
         Log.i(TAG, "Tap 2 SUCCESS. Received ${rawTxBytes.size} bytes of signed transaction")
-        return Numeric.toHexString(rawTxBytes) // Convert back to hex for Web3j broadcast
+        return FastHex.encodeWithPrefix(rawTxBytes) // Convert back to hex for Web3j broadcast
     }
 }

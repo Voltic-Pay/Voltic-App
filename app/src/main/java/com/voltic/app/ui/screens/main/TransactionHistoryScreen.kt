@@ -87,8 +87,8 @@ fun TransactionHistoryScreen(
     }
 
     LaunchedEffect(Unit) {
-        val credentials = walletManager.loadExistingCredentialsAsync()
-        address = credentials?.address
+        val wallet = walletManager.loadExistingWalletAsync()
+        address = wallet?.address?.toString()
         loadTransactions(1)
     }
 

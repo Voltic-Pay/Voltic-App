@@ -60,10 +60,10 @@ fun SpendLimitScreen(
     fun refreshData() {
         scope.launch {
             isFetching = true
-            val credentials = walletManager.loadExistingCredentialsAsync()
+            val credentials = walletManager.loadExistingWalletAsync()
             if (credentials != null) {
-                currentLimitInfo = chain.getSpendLimitInfo(credentials.address)
-                vaultBalance = chain.getVaultBalance(credentials.address)
+                currentLimitInfo = chain.getSpendLimitInfo(credentials.address.toString())
+                vaultBalance = chain.getVaultBalance(credentials.address.toString())
             }
             isFetching = false
         }
@@ -202,7 +202,7 @@ fun SpendLimitScreen(
                                     scope.launch {
                                         isUpdating = true
                                         try {
-                                            val creds = walletManager.loadExistingCredentialsAsync()!!
+                                            val creds = walletManager.loadExistingWalletAsync()!!
                                             chain.depositToVault(creds, managementAmountInput)
                                             managementAmountInput = ""
                                             refreshData()
@@ -224,7 +224,7 @@ fun SpendLimitScreen(
                                     scope.launch {
                                         isUpdating = true
                                         try {
-                                            val creds = walletManager.loadExistingCredentialsAsync()!!
+                                            val creds = walletManager.loadExistingWalletAsync()!!
                                             chain.withdrawFromVault(creds, managementAmountInput)
                                             managementAmountInput = ""
                                             refreshData()
@@ -319,7 +319,7 @@ fun SpendLimitScreen(
                         scope.launch {
                             isUpdating = true
                             try {
-                                val creds = walletManager.loadExistingCredentialsAsync()!!
+                                val creds = walletManager.loadExistingWalletAsync()!!
                                 chain.updateSpendLimit(creds, selectedPeriod, limitAmountInput.trim())
                                 limitAmountInput = ""
                                 refreshData()

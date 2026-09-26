@@ -141,22 +141,29 @@ dependencies {
 secrets {
     defaultPropertiesFileName = "local.properties"
 }
-ethersAbigen {
-    // set by default
-    directorySource("../contracts/abi")
-
-    // set by default
-    outputDir = "contracts"
-
-}
 val forgeBuild = tasks.register<Exec>("forgeBuild") {
     workingDir = file("../contracts")
     commandLine("forge", "build")
-
     inputs.dir("../contracts/src")
     outputs.dir("../contracts/out")
 }
+// TODO:  not the optimal way to do it, but ok for now
+ethersAbigen {
+    directorySource("../contracts/out/VolticSmartWallet.sol") {
+        packageOverride.set("com.voltic.contracts")
+    }
+}
+android {
+    sourceSets {
+        getByName("main") {
+            kotlin.srcDir("build/generated/source/ethers/main/kotlin")
+        }
+    }
+}
 
+tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }.configureEach {
+    dependsOn("ethersAbigen")
+}
 tasks.named("ethersAbigen") {
     dependsOn(forgeBuild)
 }

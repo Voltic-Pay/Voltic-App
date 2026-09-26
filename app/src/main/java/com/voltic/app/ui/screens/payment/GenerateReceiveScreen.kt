@@ -33,7 +33,7 @@ import com.voltic.app.wallet.WalletManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import org.web3j.crypto.Credentials
+import io.ethers.signers.PrivateKeySigner
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -53,10 +53,10 @@ fun GenerateReceiveScreen(
 
     var readerState by remember { mutableStateOf<ReaderState>(ReaderState.WaitingForTap1) }
     var nfcReader by remember { mutableStateOf<NfcReaderManager?>(null) }
-    var merchantCredentials by remember { mutableStateOf<Credentials?>(null) }
+    var merchantCredentials by remember { mutableStateOf<PrivateKeySigner?>(null) }
 
     LaunchedEffect(Unit) {
-        merchantCredentials = walletManager.loadExistingCredentialsAsync()
+        merchantCredentials = walletManager.loadExistingWalletAsync()
     }
 
     DisposableEffect(Unit) {

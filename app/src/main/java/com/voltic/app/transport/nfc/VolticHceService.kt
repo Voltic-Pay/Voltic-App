@@ -51,11 +51,11 @@ class VolticHceService : HostApduService() {
             launchConfirmationActivity()
             awaitingSecondTap = true
 
-            val creds = WalletManager(this).loadExistingCredentials()
+            val creds = WalletManager(this).loadExistingWallet()
                 ?: throw IllegalStateException("No Wallet")
 
             Log.d(TAG, "Sending back public address: ${creds.address}")
-            creds.address.toByteArray(Charsets.UTF_8) + ApduConstants.STATUS_SUCCESS
+            creds.address.toString().toByteArray(Charsets.UTF_8) + ApduConstants.STATUS_SUCCESS
         } catch (e: Exception) {
             Log.e(TAG, "First Tap Failed", e)
             ApduConstants.STATUS_FAILED
@@ -85,7 +85,7 @@ class VolticHceService : HostApduService() {
             val gasLimit = BigInteger(parts[3])
             Log.d(TAG, "Parsed vaultNonce: $vaultNonce, eoaNonce: $eoaNonce, gasPrice: $gasPrice, gasLimit:$gasLimit")
 
-            val creds = WalletManager(this).loadExistingCredentials()!!
+            val creds = WalletManager(this).loadExistingWallet()!!
             val request = NfcSession.pendingRequest.value!!
 
             if (NfcSession.useVault) {

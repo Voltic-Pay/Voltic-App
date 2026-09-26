@@ -181,7 +181,7 @@ fun ConfirmPaymentScreen(
                                     isSending = true
                                     sendResult = null
                                     try {
-                                        val credentials = walletManager.loadExistingCredentialsAsync()
+                                        val credentials = walletManager.loadExistingWalletAsync()
                                             ?: throw IllegalStateException("No wallet loaded!")
                                         val txHash = withContext(Dispatchers.IO) {
                                             if (useVault) {
