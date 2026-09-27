@@ -39,7 +39,7 @@ sealed class ReaderState {
 class NfcReaderManager(
     private val activity: Activity,
     private val request: NFCPaymentRequest,
-    private val merchantCredentials: PrivateKeySigner,
+    private val merchantWallet: PrivateKeySigner,
     private val onStateChanged: (ReaderState) -> Unit,
 ) : NfcAdapter.ReaderCallback {
 
@@ -124,7 +124,7 @@ class NfcReaderManager(
                             try {
                                 // CLEAN: Pass off all raw variables to the chain layer!
                                 val txHash = chain.broadcastNfcVaultPayment(
-                                    merchantCredentials = merchantCredentials,
+                                    merchantWallet = merchantWallet,
                                     customerAddress = state.customerAddress,
                                     toAddress = request.to,
                                     amountEth = amountEthFromPeer,

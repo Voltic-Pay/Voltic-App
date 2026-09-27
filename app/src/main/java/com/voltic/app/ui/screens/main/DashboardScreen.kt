@@ -149,11 +149,11 @@ fun DashboardScreen(
     }
 
     LaunchedEffect(Unit) {
-        val credentials = walletManager.loadExistingWalletAsync()
-        if (credentials != null) {
-            address = credentials.address.toString()
-            refreshData(credentials.address.toString(), showSkeleton = true)
-            currentLimitInfo = chain.getSpendLimitInfo(credentials.address.toString())
+        val wallet = walletManager.loadExistingWalletAsync()
+        if (wallet != null) {
+            address = wallet.address.toString()
+            refreshData(wallet.address.toString(), showSkeleton = true)
+            currentLimitInfo = chain.getSpendLimitInfo(wallet.address.toString())
         } else {
             balanceState = BalanceUiState.Error("No active wallet found")
             isInitialLoading = false
@@ -385,10 +385,10 @@ fun DashboardScreen(
                                                 if (!AmountInputSanitizer.isGreaterThanZero(amountInput)) {
                                                     throw IllegalArgumentException("Please enter an amount more than 0")
                                                 }
-                                                val credentials = walletManager.loadExistingWalletAsync()
+                                                val wallet = walletManager.loadExistingWalletAsync()
                                                     ?: throw IllegalStateException("No active wallet loaded")
                                                 val txHash = withContext(Dispatchers.IO) {
-                                                    chain.sendEth(credentials, recipientInput.trim(), amountInput.trim())
+                                                    chain.sendEth(wallet, recipientInput.trim(), amountInput.trim())
                                                 }
                                                 sendTxResult = "Success! Tx: $txHash"
                                                 address?.let { refreshData(it) }

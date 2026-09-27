@@ -53,10 +53,10 @@ fun GenerateReceiveScreen(
 
     var readerState by remember { mutableStateOf<ReaderState>(ReaderState.WaitingForTap1) }
     var nfcReader by remember { mutableStateOf<NfcReaderManager?>(null) }
-    var merchantCredentials by remember { mutableStateOf<PrivateKeySigner?>(null) }
+    var merchantWallet by remember { mutableStateOf<PrivateKeySigner?>(null) }
 
     LaunchedEffect(Unit) {
-        merchantCredentials = walletManager.loadExistingWalletAsync()
+        merchantWallet = walletManager.loadExistingWalletAsync()
     }
 
     DisposableEffect(Unit) {
@@ -65,8 +65,8 @@ fun GenerateReceiveScreen(
         }
     }
 
-    LaunchedEffect(currentAddress, amountInput, merchantCredentials) {
-        val creds = merchantCredentials ?: return@LaunchedEffect
+    LaunchedEffect(currentAddress, amountInput, merchantWallet) {
+        val wallet = merchantWallet ?: return@LaunchedEffect
 
         delay(400.milliseconds)
 
@@ -79,7 +79,7 @@ fun GenerateReceiveScreen(
                 chainId = chainId
             )
 
-            val newReader = NfcReaderManager(activity, nfcRequest, creds) { state ->
+            val newReader = NfcReaderManager(activity, nfcRequest, wallet) { state ->
                 readerState = state
             }
             newReader.start()
