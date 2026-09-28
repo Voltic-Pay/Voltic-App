@@ -141,7 +141,16 @@ dependencies {
 secrets {
     defaultPropertiesFileName = "local.properties"
 }
+val forgeInstall = tasks.register<Exec>("forgeInstall") {
+    workingDir = file("../contracts")
+    commandLine("forge", "install")
+    onlyIf {
+        val libDir = file("../contracts/lib")
+        !libDir.exists() || (libDir.listFiles()?.isEmpty() ?: true)
+    }
+}
 val forgeBuild = tasks.register<Exec>("forgeBuild") {
+    dependsOn(forgeInstall)
     workingDir = file("../contracts")
     commandLine("forge", "build")
     inputs.dir("../contracts/src")
