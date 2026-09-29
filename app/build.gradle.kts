@@ -108,11 +108,6 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.navigation.compose)
-    implementation(libs.web3j.crypto)
-    implementation(libs.web3j.abi)
-    implementation(libs.web3j.utils)
-    implementation(libs.web3j.tuples)
-    implementation(libs.web3j.core)
     implementation(libs.ens.normalize)
     implementation(libs.okhttp)
     implementation(libs.rxjava2)
@@ -141,13 +136,16 @@ dependencies {
 secrets {
     defaultPropertiesFileName = "local.properties"
 }
+class LibDirMissingSpec(private val libDir: File) : Spec<Task> {
+    override fun isSatisfiedBy(element: Task): Boolean {
+        return !libDir.exists() || (libDir.listFiles()?.isEmpty() ?: true)
+    }
+}
+
 val forgeInstall = tasks.register<Exec>("forgeInstall") {
     workingDir = file("../contracts")
     commandLine("forge", "install")
-    onlyIf {
-        val libDir = file("../contracts/lib")
-        !libDir.exists() || (libDir.listFiles()?.isEmpty() ?: true)
-    }
+    onlyIf(LibDirMissingSpec(file("../contracts/lib")))
 }
 val forgeBuild = tasks.register<Exec>("forgeBuild") {
     dependsOn(forgeInstall)

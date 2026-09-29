@@ -51,18 +51,11 @@ class ArbitrumClient {
         private var currentArbRpcIndex = 0
 
         fun formatError(e: Throwable): String {
-            val message = e.message ?: "Unknown error"
-
-            // 1. Try to decode as a Vault custom error or standard revert from the message
-            VaultErrorDecoder.decode(message)?.let { return it }
-
-            // NOTE: the old TransactionException-based revert-reason lookup (step 2 in
-            // the web3j version) doesn't apply here — ethers-kt contract calls decode
-            // reverts (including custom Solidity errors) into ContractError up front,
-            // so that information is already folded into `message` by the time an
-            // exception reaches here.
+            // 1. Typed contract errors (custom errors, Error(string), Panic) -> friendly text
+            VaultErrors.describe(e)?.let { return it }
 
             // 2. Fallback to existing manual patterns or the raw message
+            val message = e.message ?: "Unknown error"
             val msg = message.lowercase()
             return if (msg.contains("0x0") && msg.contains("revert")) {
                 "Sender has reached maximum spending limit or has no funds."
@@ -249,7 +242,10 @@ class ArbitrumClient {
                 Bytes(signatureHex)
             )
 
-            // 2. Fetch the true gas limit, safe fallback of 150_000 for storage updates
+            // 2. Simulate first: throws the decoded custom error instead of broadcasting a doomed tx
+            call.assertWillSucceed(merchantWallet.address)
+
+            // 3. Fetch the true gas limit, safe fallback of 150_000 for storage updates
             val trueGasLimit = estimateGasLimit(
                 provider = provider,
                 from = merchantWallet.address,
@@ -261,7 +257,7 @@ class ArbitrumClient {
             call.gas(trueGasLimit)
             call.gasPrice(getBufferedGasPrice(provider))
 
-            // 3. Sign + broadcast, then wait for the receipt so we can check status
+            // 4. Sign + broadcast, then wait for the receipt so we can check status
             val pending = call.send(merchantWallet).sendAwait().unwrap()
             val receipt = pending.inclusion().unwrap()
 
@@ -275,6 +271,8 @@ class ArbitrumClient {
             val amountWei = EthUnit.ETHER.toWei(amountEth).toBigInteger()
             val vault = VolticSmartWallet(provider, VAULT_ADDRESS_TYPED)
             val call = vault.deposit().value(amountWei)
+
+            call.assertWillSucceed(wallet.address)
 
             val dynamicGasLimit = estimateGasLimit(provider, wallet.address, VAULT_ADDRESS_TYPED, amountWei, call.data, 60_000L)
             call.gas(dynamicGasLimit)
@@ -292,6 +290,8 @@ class ArbitrumClient {
             val amountWei = EthUnit.ETHER.toWei(amountEth).toBigInteger()
             val vault = VolticSmartWallet(provider, VAULT_ADDRESS_TYPED)
             val call = vault.withdraw(amountWei)
+
+            call.assertWillSucceed(wallet.address)
 
             val dynamicGasLimit = estimateGasLimit(provider, wallet.address, VAULT_ADDRESS_TYPED, BigInteger.ZERO, call.data, 70_000L)
             call.gas(dynamicGasLimit)
@@ -322,6 +322,8 @@ class ArbitrumClient {
             val amountWei = EthUnit.ETHER.toWei(amountEth).toBigInteger()
             val vault = VolticSmartWallet(provider, VAULT_ADDRESS_TYPED)
             val call = vault.setSpendLimit(BigInteger.valueOf(periodIndex.toLong()), amountWei)
+
+            call.assertWillSucceed(wallet.address)
 
             val dynamicGasLimit = estimateGasLimit(provider, wallet.address, VAULT_ADDRESS_TYPED, BigInteger.ZERO, call.data, 80_000L)
             call.gas(dynamicGasLimit)
