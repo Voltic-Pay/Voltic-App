@@ -8,7 +8,6 @@ lifecycleRuntimeKtx = "2.6.1"
 activityCompose = "1.8.0"
 kotlin = "2.4.10"
 composeBom = "2026.02.01"
-web3j = "5.0.2"
 jackson = "2.18.9"
 netty = "4.1.112.Final"
 commonsLang3 = "3.18.0"
@@ -43,11 +42,6 @@ androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "u
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
-web3j-core = { group = "org.web3j", name = "core", version.ref = "web3j" }
-web3j-abi = { group = "org.web3j", name = "abi", version.ref = "web3j" }
-web3j-utils = { group = "org.web3j", name = "utils", version.ref = "web3j" }
-web3j-crypto = { group = "org.web3j", name = "crypto", version.ref = "web3j" }
-web3j-tuples = { group = "org.web3j", name = "tuples", version.ref = "web3j" }
 ethers-bom = { module = "io.kriptal.ethers:ethers-bom", version.ref = "ethers" }
 ethers-core = { module = "io.kriptal.ethers:ethers-core" }
 ethers-abi = { module = "io.kriptal.ethers:ethers-abi" }

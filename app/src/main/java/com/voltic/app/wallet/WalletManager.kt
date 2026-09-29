@@ -8,7 +8,6 @@ import io.ethers.core.FastHex
 import io.ethers.crypto.bip39.MnemonicCode
 import io.ethers.signers.MnemonicKeySource
 import io.ethers.signers.PrivateKeySigner
-import org.web3j.crypto.Credentials
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.security.InvalidAlgorithmParameterException
@@ -224,7 +223,7 @@ class WalletManager(private val context: Context) {
         // MnemonicUtils.validateMnemonic(...) boolean check.
         val mnemonicCode = try {
             MnemonicCode(trimmed)
-        } catch (e: IllegalArgumentException) {
+        } catch (e: RuntimeException) {
             throw WalletException.InvalidPrivateKeyFormat(
                 "That recovery phrase isn't valid. Check the spelling and word order."
             )
@@ -331,16 +330,6 @@ class WalletManager(private val context: Context) {
         }
     }
 
-    /**
-     * Load existing wallet as Web3j [Credentials] for contract interactions.
-     */
-    fun loadExistingCredentials(): Credentials? = loadExistingWallet()?.toCredentials()
-
-    /**
-     * Async wrapper for loading existing wallet as Web3j [Credentials].
-     */
-    suspend fun loadExistingCredentialsAsync(): Credentials? = loadExistingWalletAsync()?.toCredentials()
-
     /** Async wrapper for retrieving the backup phrase — safe to call from the main thread. TODO: don't for get this */
     suspend fun getMnemonicForBackupAsync(): String = withContext(Dispatchers.Default) {
         getMnemonicForBackup()
@@ -355,12 +344,4 @@ class WalletManager(private val context: Context) {
     fun setBalanceHidden(hidden: Boolean) {
         getEncryptedPrefs().edit().putBoolean(balanceHiddenField, hidden).apply()
     }
-}
-
-/**
- * Extension function to convert ethers-kt [PrivateKeySigner] to Web3j [Credentials].
- */
-fun PrivateKeySigner.toCredentials(): Credentials {
-    val hex = FastHex.encodeWithoutPrefix(this.signingKey.privateKey)
-    return Credentials.create(hex)
 }

@@ -1,7 +1,4 @@
-# Web3j rules
--keep class org.web3j.** { *; }
 -keep class org.bouncycastle.** { *; }
--dontwarn org.web3j.**
 -dontwarn org.bouncycastle.**
 -dontwarn java.beans.**
 -dontwarn com.fasterxml.jackson.**
@@ -33,11 +30,9 @@
 -keep class com.voltic.app.ui.model.** { *; }
 
 
-# Web3j generated contract wrappers — preserve generics for reflection-based ABI decoding
+# Generated contract wrappers
 -keep class com.voltic.contracts.** { *; }
 -keepclassmembers class com.voltic.contracts.** { *; }
--keep,allowobfuscation,allowshrinking class org.web3j.abi.TypeReference
--keep class org.web3j.abi.datatypes.** { *; }
 -keepattributes Signature, Exceptions, *Annotation*, InnerClasses, EnclosingMethod
 
 # Suppress warnings for missing optional JVM/library dependencies

@@ -60,10 +60,10 @@ fun SpendLimitScreen(
     fun refreshData() {
         scope.launch {
             isFetching = true
-            val credentials = walletManager.loadExistingCredentialsAsync()
-            if (credentials != null) {
-                currentLimitInfo = chain.getSpendLimitInfo(credentials.address)
-                vaultBalance = chain.getVaultBalance(credentials.address)
+            val wallet = walletManager.loadExistingWalletAsync()
+            if (wallet != null) {
+                currentLimitInfo = chain.getSpendLimitInfo(wallet.address.toString())
+                vaultBalance = chain.getVaultBalance(wallet.address.toString())
             }
             isFetching = false
         }
@@ -202,8 +202,8 @@ fun SpendLimitScreen(
                                     scope.launch {
                                         isUpdating = true
                                         try {
-                                            val creds = walletManager.loadExistingCredentialsAsync()!!
-                                            chain.depositToVault(creds, managementAmountInput)
+                                            val wallet = walletManager.loadExistingWalletAsync()!!
+                                            chain.depositToVault(wallet, managementAmountInput)
                                             managementAmountInput = ""
                                             refreshData()
                                             Toast.makeText(context, "Capital Loaded!", Toast.LENGTH_SHORT).show()
@@ -224,8 +224,8 @@ fun SpendLimitScreen(
                                     scope.launch {
                                         isUpdating = true
                                         try {
-                                            val creds = walletManager.loadExistingCredentialsAsync()!!
-                                            chain.withdrawFromVault(creds, managementAmountInput)
+                                            val wallet = walletManager.loadExistingWalletAsync()!!
+                                            chain.withdrawFromVault(wallet, managementAmountInput)
                                             managementAmountInput = ""
                                             refreshData()
                                             Toast.makeText(context, "Withdrawal Success!", Toast.LENGTH_SHORT).show()
@@ -319,8 +319,8 @@ fun SpendLimitScreen(
                         scope.launch {
                             isUpdating = true
                             try {
-                                val creds = walletManager.loadExistingCredentialsAsync()!!
-                                chain.updateSpendLimit(creds, selectedPeriod, limitAmountInput.trim())
+                                val wallet = walletManager.loadExistingWalletAsync()!!
+                                chain.updateSpendLimit(wallet, selectedPeriod, limitAmountInput.trim())
                                 limitAmountInput = ""
                                 refreshData()
                                 Toast.makeText(context, "Limit Applied!", Toast.LENGTH_SHORT).show()

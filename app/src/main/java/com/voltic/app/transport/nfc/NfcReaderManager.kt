@@ -11,7 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import org.web3j.crypto.Credentials
+import io.ethers.signers.PrivateKeySigner
 import java.math.BigInteger
 
 sealed class ReaderState {
@@ -39,7 +39,7 @@ sealed class ReaderState {
 class NfcReaderManager(
     private val activity: Activity,
     private val request: NFCPaymentRequest,
-    private val merchantCredentials: Credentials,
+    private val merchantWallet: PrivateKeySigner,
     private val onStateChanged: (ReaderState) -> Unit,
 ) : NfcAdapter.ReaderCallback {
 
@@ -124,7 +124,7 @@ class NfcReaderManager(
                             try {
                                 // CLEAN: Pass off all raw variables to the chain layer!
                                 val txHash = chain.broadcastNfcVaultPayment(
-                                    merchantCredentials = merchantCredentials,
+                                    merchantWallet = merchantWallet,
                                     customerAddress = state.customerAddress,
                                     toAddress = request.to,
                                     amountEth = amountEthFromPeer,
@@ -140,7 +140,7 @@ class NfcReaderManager(
                         }
                     } else {
                         // --- LEGACY PATH ---
-                        val signedTxHex = org.web3j.utils.Numeric.toHexString(rawData) // only utility import needed
+                        val signedTxHex = io.ethers.core.FastHex.encodeWithPrefix(rawData) // only utility import needed
                         updateState(ReaderState.Broadcasting)
                         scope.launch {
                             try {

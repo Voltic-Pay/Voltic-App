@@ -51,11 +51,11 @@ class VolticHceService : HostApduService() {
             launchConfirmationActivity()
             awaitingSecondTap = true
 
-            val creds = WalletManager(this).loadExistingCredentials()
+            val wallet = WalletManager(this).loadExistingWallet()
                 ?: throw IllegalStateException("No Wallet")
 
-            Log.d(TAG, "Sending back public address: ${creds.address}")
-            creds.address.toByteArray(Charsets.UTF_8) + ApduConstants.STATUS_SUCCESS
+            Log.d(TAG, "Sending back public address: ${wallet.address}")
+            wallet.address.toString().toByteArray(Charsets.UTF_8) + ApduConstants.STATUS_SUCCESS
         } catch (e: Exception) {
             Log.e(TAG, "First Tap Failed", e)
             ApduConstants.STATUS_FAILED
@@ -85,7 +85,7 @@ class VolticHceService : HostApduService() {
             val gasLimit = BigInteger(parts[3])
             Log.d(TAG, "Parsed vaultNonce: $vaultNonce, eoaNonce: $eoaNonce, gasPrice: $gasPrice, gasLimit:$gasLimit")
 
-            val creds = WalletManager(this).loadExistingCredentials()!!
+            val wallet = WalletManager(this).loadExistingWallet()!!
             val request = NfcSession.pendingRequest.value!!
 
             if (NfcSession.useVault) {
@@ -93,7 +93,7 @@ class VolticHceService : HostApduService() {
                 val deadline = BigInteger.valueOf(System.currentTimeMillis() / 1000 + 1800)
 
                 val signatureHex = chain.signVaultPayment(
-                    creds, request.to, request.amountEth ?: "0", vaultNonce, deadline
+                    wallet, request.to, request.amountEth ?: "0", vaultNonce, deadline
                 )
 
                 NfcSession.clear()
@@ -105,7 +105,7 @@ class VolticHceService : HostApduService() {
 
             Log.i(TAG, "Starting Offline Signing for ${request.amountEth} ETH")
             val rawSignedTx = chain.signEthTransactionOffline(
-                creds, request.to, request.amountEth ?: "0", eoaNonce, gasPrice,gasLimit
+                wallet, request.to, request.amountEth ?: "0", eoaNonce, gasPrice,gasLimit
             )
 
             NfcSession.clear()

@@ -18,7 +18,7 @@ import com.voltic.app.ui.components.ConfirmationField
 import com.voltic.app.ui.components.ConfirmationScreen
 import com.voltic.app.wallet.WalletManager
 import kotlinx.coroutines.launch
-import org.web3j.crypto.MnemonicUtils
+import io.ethers.crypto.bip39.MnemonicCode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -142,7 +142,13 @@ fun RestoreWalletScreen(
                 Button(
                     onClick = {
                         val cleaned = cleanAndNormalizeMnemonic(seedInput)
-                        if (cleaned.isEmpty() || !MnemonicUtils.validateMnemonic(cleaned)) {
+                        val isValidMnemonic = try {
+                            MnemonicCode(cleaned)
+                            true
+                        } catch (e: RuntimeException) {
+                            false
+                        }
+                        if (cleaned.isEmpty() || !isValidMnemonic) {
                             errorMessage = "That recovery phrase isn't valid. Check the spelling and word order."
                             return@Button
                         }
