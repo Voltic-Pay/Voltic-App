@@ -67,6 +67,23 @@ class ArbitrumClient {
             }
         }
 
+        private val httpCodeRegex = Regex("""(?<![0-9a-zA-Z.])(429|521)(?![0-9a-zA-Z])""")
+
+        fun isNetworkError(e: Throwable): Boolean {
+            val cause = e.cause
+            val msg = e.message ?: ""
+            return cause is ConnectException ||
+                    cause is SocketTimeoutException ||
+                    cause is UnresolvedAddressException ||
+                    cause is UnknownHostException ||
+                    cause is IOException ||
+                    e is IOException ||
+                    httpCodeRegex.containsMatchIn(msg) ||
+                    msg.contains("sync status") ||
+                    msg.contains("call failed") ||
+                    msg.contains("All RPCs failed")
+        }
+
         val txMutex = Mutex()
     }
 
@@ -90,25 +107,7 @@ class ArbitrumClient {
             } catch (e: Exception) {
                 lastException = e
 
-                // ethers-kt RPC calls return Result<T, RpcError> instead of throwing —
-                // but every call site below uses .unwrap(), which converts a failed
-                // Result back into a thrown exception so this loop can stay
-                // exception-based, same shape as the old web3j version. Network-layer
-                // failures (timeouts, connection refused) surface as the *cause* of
-                // that wrapped exception rather than as `e` itself.
-                val cause = e.cause
-                val isKnownFlaky = cause is ConnectException ||
-                        cause is SocketTimeoutException ||
-                        cause is UnresolvedAddressException ||
-                        cause is UnknownHostException ||
-                        cause is IOException ||
-                        e is IOException ||
-                        e.message?.contains("521") == true ||
-                        e.message?.contains("429") == true ||
-                        e.message?.contains("sync status") == true ||
-                        e.message?.contains("call failed") == true
-
-                if (isKnownFlaky) {
+                if (isNetworkError(e)) {
                     Log.w("ArbitrumClient", "RPC failed ($url): ${e.message}, trying next")
                     continue
                 } else {

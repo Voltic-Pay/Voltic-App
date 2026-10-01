@@ -82,6 +82,7 @@ import com.voltic.app.ui.components.TransactionSkeletonItem
 import com.voltic.app.ui.model.AmountInputSanitizer
 import com.voltic.app.ui.model.BalanceUiState
 import com.voltic.app.wallet.WalletManager
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -146,19 +147,21 @@ fun DashboardScreen(
                     transactions = history
                     isOffline = false
 
-                    walletManager.saveCachedBalance(ethDecimal, price)
+                    walletManager.saveCachedBalance(walletAddress, ethDecimal, price)
                 }
 
                 try {
                     currentLimitInfo = chain.getSpendLimitInfo(walletAddress)
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     Log.w("DashboardScreen", "Failed to fetch spend limit info: ${e.message}")
                 }
             } catch (e: Throwable) {
+                if (e is CancellationException) throw e
                 Log.w("DashboardScreen", "Refresh failed due to network error", e)
                 isOffline = true
 
-                val cached = walletManager.getCachedBalance()
+                val cached = walletManager.getCachedBalance(walletAddress)
                 if (cached != null) {
                     balanceState = BalanceUiState.Success(cached.first, cached.second)
                 } else if (balanceState !is BalanceUiState.Success) {
@@ -428,8 +431,14 @@ fun DashboardScreen(
                                                     sendTxResult = "Success! Tx: $txHash"
                                                     address?.let { refreshData(it) }
                                                 } catch (e: Exception) {
+                                                    if (e is CancellationException) throw e
                                                     Log.e("DashboardScreen", "Send ETH failed", e)
-                                                    sendTxResult = "Send Failed: ${e.message}"
+                                                    val displayMsg = ArbitrumClient.formatError(e)
+                                                    sendTxResult = if (ArbitrumClient.isNetworkError(e)) {
+                                                        "Send Failed: $displayMsg (Network offline? Use NFC to send offline.)"
+                                                    } else {
+                                                        "Send Failed: $displayMsg"
+                                                    }
                                                 } finally {
                                                     isSendingTx = false
                                                 }
@@ -503,13 +512,14 @@ fun BalanceCard(
 ) {
     var showInfoNote by remember { mutableStateOf(false) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column {
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.SemiBold
         )
+        Spacer(modifier = Modifier.height(8.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -560,13 +570,25 @@ fun BalanceCard(
             }
         }
 
-        AnimatedVisibility(visible = isOffline && showInfoNote) {
+        AnimatedVisibility(
+            visible = isOffline && showInfoNote,
+            enter = fadeIn(tween(180)) +
+                    expandVertically(
+                        animationSpec = spring(dampingRatio = 0.86f, stiffness = 380f),
+                        expandFrom = Alignment.Top
+                    ),
+            exit = fadeOut(tween(140)) +
+                    shrinkVertically(
+                        animationSpec = spring(dampingRatio = 0.9f, stiffness = 420f),
+                        shrinkTowards = Alignment.Top
+                    )
+        ) {
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp)
+                    .padding(top = 8.dp)
             ) {
                 Row(
                     modifier = Modifier.padding(12.dp),

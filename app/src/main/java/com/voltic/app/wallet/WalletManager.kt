@@ -348,15 +348,16 @@ class WalletManager(private val context: Context) {
         getEncryptedPrefs().edit().putBoolean(balanceHiddenField, hidden).apply()
     }
 
-    /** Save cached balance to secure storage on successful fetch. */
-    fun saveCachedBalance(ethAmount: BigDecimal, ethPriceUsd: BigDecimal?) {
+    /** Save cached balance to secure storage on successful fetch, keyed by address. */
+    fun saveCachedBalance(address: String, ethAmount: BigDecimal, ethPriceUsd: BigDecimal?) {
         try {
             val prefs = getEncryptedPrefs()
-            val editor = prefs.edit().putString(cachedEthBalanceField, ethAmount.toPlainString())
+            val normalizedAddr = address.lowercase()
+            val editor = prefs.edit().putString("${cachedEthBalanceField}_$normalizedAddr", ethAmount.toPlainString())
             if (ethPriceUsd != null) {
-                editor.putString(cachedUsdPriceField, ethPriceUsd.toPlainString())
+                editor.putString("${cachedUsdPriceField}_$normalizedAddr", ethPriceUsd.toPlainString())
             } else {
-                editor.remove(cachedUsdPriceField)
+                editor.remove("${cachedUsdPriceField}_$normalizedAddr")
             }
             editor.apply()
         } catch (e: Exception) {
@@ -364,13 +365,14 @@ class WalletManager(private val context: Context) {
         }
     }
 
-    /** Retrieve cached balance if network is offline or unavailable. */
-    fun getCachedBalance(): Pair<BigDecimal, BigDecimal?>? {
+    /** Retrieve cached balance for a specific address if network is offline or unavailable. */
+    fun getCachedBalance(address: String): Pair<BigDecimal, BigDecimal?>? {
         return try {
             val prefs = getEncryptedPrefs()
-            val ethStr = prefs.getString(cachedEthBalanceField, null) ?: return null
+            val normalizedAddr = address.lowercase()
+            val ethStr = prefs.getString("${cachedEthBalanceField}_$normalizedAddr", null) ?: return null
             val ethAmount = BigDecimal(ethStr)
-            val usdStr = prefs.getString(cachedUsdPriceField, null)
+            val usdStr = prefs.getString("${cachedUsdPriceField}_$normalizedAddr", null)
             val usdPrice = usdStr?.let { BigDecimal(it) }
             Pair(ethAmount, usdPrice)
         } catch (e: Exception) {

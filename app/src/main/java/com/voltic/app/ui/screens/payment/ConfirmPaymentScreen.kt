@@ -192,9 +192,14 @@ fun ConfirmPaymentScreen(
                                         }
                                         sendResult = "Success! Tx: $txHash"
                                     } catch (e: Exception) {
+                                        if (e is kotlin.coroutines.cancellation.CancellationException) throw e
                                         Log.e("ConfirmPayment", "Payment failed", e)
                                         val displayMsg = ArbitrumClient.formatError(e)
-                                        sendResult = "Payment Failed: $displayMsg (Network offline? Tap merchant's phone via NFC to pay offline.)"
+                                        sendResult = if (ArbitrumClient.isNetworkError(e)) {
+                                            "Payment Failed: $displayMsg (Network offline? Tap merchant's phone via NFC to pay offline.)"
+                                        } else {
+                                            "Payment Failed: $displayMsg"
+                                        }
                                     } finally {
                                         isSending = false
                                     }
