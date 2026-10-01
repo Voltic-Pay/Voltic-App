@@ -1,7 +1,6 @@
 -keep class org.bouncycastle.** { *; }
 -dontwarn org.bouncycastle.**
 -dontwarn java.beans.**
--dontwarn com.fasterxml.jackson.**
 
 # Kotlinx Serialization
 -keepattributes *Annotation*, InnerClasses

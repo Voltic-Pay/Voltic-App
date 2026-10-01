@@ -6,19 +6,6 @@ plugins {
     id("io.kriptal.ethers.abigen-plugin") version "2.0.1"
 }
 
-configurations.all {
-    resolutionStrategy.eachDependency {
-        if (requested.group == "com.fasterxml.jackson.core") {
-            useVersion(libs.versions.jackson.get())
-        }
-        if (requested.group == "io.netty") {
-            useVersion(libs.versions.netty.get())
-        }
-        if (requested.group == "org.apache.commons" && requested.name == "commons-lang3") {
-            useVersion(libs.versions.commonsLang3.get())
-        }
-    }
-}
 
 android {
     namespace = "com.voltic.app"
@@ -29,7 +16,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.2-alpha"
+        versionName = "0.4-SNAPSHOT"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -81,7 +68,6 @@ android {
             excludes += "META-INF/LICENSE*"
             excludes += "META-INF/NOTICE*"
             excludes += "META-INF/DEPENDENCIES"
-            excludes += "META-INF/io.netty.versions.properties"
             excludes += "META-INF/FastDoubleParser-LICENSE"
             excludes += "META-INF/FastDoubleParser-NOTICE"
             excludes += "META-INF/INDEX.LIST"
@@ -141,20 +127,64 @@ class LibDirMissingSpec(private val libDir: File) : Spec<Task> {
         return !libDir.exists() || (libDir.listFiles()?.isEmpty() ?: true)
     }
 }
+val contractsDir = file("../contracts")
+
+val forgeDeps = mapOf(
+    "openzeppelin-contracts" to "OpenZeppelin/openzeppelin-contracts@v5.7.0",
+    "forge-std" to "foundry-rs/forge-std" // TODO: pin a tag once you pick one
+)
+
+fun missingForgeDeps(): List<Pair<String, String>> =
+    forgeDeps.filter { (name, _) ->
+        File(contractsDir, "lib/$name").listFiles().isNullOrEmpty()
+    }.toList()
+
+fun forgeAvailable(): Boolean = runCatching {
+    ProcessBuilder("forge", "--version")
+        .redirectErrorStream(true).start().waitFor() == 0
+}.getOrDefault(false)
 
 val forgeInstall = tasks.register<Exec>("forgeInstall") {
-    workingDir = file("../contracts")
-    commandLine("forge", "install")
-    onlyIf(LibDirMissingSpec(file("../contracts/lib")))
+    val targetDir = file("../contracts")
+    val requiredDeps = mapOf(
+        "openzeppelin-contracts" to "OpenZeppelin/openzeppelin-contracts@v5.7.0",
+        "forge-std" to "foundry-rs/forge-std"
+    )
+
+    workingDir = targetDir
+
+    doFirst {
+        val forgeExists = runCatching {
+            ProcessBuilder("forge", "--version").redirectErrorStream(true).start().waitFor() == 0
+        }.getOrDefault(false)
+
+        if (!forgeExists) {
+            throw GradleException(
+                "Foundry not found. Install it: curl -L https://foundry.paradigm.xyz | bash && foundryup"
+            )
+        }
+
+        val missing = requiredDeps.filter { (name, _) ->
+            File(targetDir, "lib/$name").listFiles().isNullOrEmpty()
+        }
+
+        if (missing.isNotEmpty()) {
+            missing.forEach { (name, _) -> File(targetDir, "lib/$name").deleteRecursively() }
+            commandLine(listOf("forge", "install", "--no-git") + missing.values)
+        } else {
+            commandLine("echo", "All forge dependencies up to date")
+        }
+    }
 }
+
 val forgeBuild = tasks.register<Exec>("forgeBuild") {
     dependsOn(forgeInstall)
-    workingDir = file("../contracts")
+    workingDir = contractsDir
     commandLine("forge", "build")
     inputs.dir("../contracts/src")
+    inputs.dir("../contracts/lib")
     outputs.dir("../contracts/out")
 }
-// TODO:  not the optimal way to do it, but ok for now
 ethersAbigen {
     directorySource("../contracts/out/VolticSmartWallet.sol") {
         packageOverride.set("com.voltic.contracts")
@@ -162,8 +192,8 @@ ethersAbigen {
 }
 android {
     sourceSets {
-        getByName("main") {
-            kotlin.srcDir("build/generated/source/ethers/main/kotlin")
+        named("main") {
+            kotlin.srcDir(file("build/generated/source/ethers/main/kotlin"))
         }
     }
 }
