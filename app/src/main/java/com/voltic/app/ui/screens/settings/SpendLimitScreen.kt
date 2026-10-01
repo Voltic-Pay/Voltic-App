@@ -62,8 +62,12 @@ fun SpendLimitScreen(
             isFetching = true
             val wallet = walletManager.loadExistingWalletAsync()
             if (wallet != null) {
-                currentLimitInfo = chain.getSpendLimitInfo(wallet.address.toString())
-                vaultBalance = chain.getVaultBalance(wallet.address.toString())
+                try {
+                    currentLimitInfo = chain.getSpendLimitInfo(wallet.address.toString())
+                    vaultBalance = chain.getVaultBalance(wallet.address.toString())
+                } catch (e: Exception) {
+                    Log.e("SpendLimitScreen", "Failed to fetch spend limit or vault balance", e)
+                }
             }
             isFetching = false
         }

@@ -10,6 +10,7 @@ import io.ethers.signers.MnemonicKeySource
 import io.ethers.signers.PrivateKeySigner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.math.BigDecimal
 import java.security.InvalidAlgorithmParameterException
 import java.security.KeyStoreException
 import java.security.ProviderException
@@ -65,6 +66,8 @@ class WalletManager(private val context: Context) {
     private val addressField = "ethereum_address"
     private val mnemonicField = "encrypted_mnemonic"
     private val balanceHiddenField = "balance_hidden"
+    private val cachedEthBalanceField = "cached_eth_balance"
+    private val cachedUsdPriceField = "cached_usd_price"
 
     companion object {
         private const val TAG = "WalletManager"
@@ -343,5 +346,36 @@ class WalletManager(private val context: Context) {
     /** Update the balance visibility preference. */
     fun setBalanceHidden(hidden: Boolean) {
         getEncryptedPrefs().edit().putBoolean(balanceHiddenField, hidden).apply()
+    }
+
+    /** Save cached balance to secure storage on successful fetch. */
+    fun saveCachedBalance(ethAmount: BigDecimal, ethPriceUsd: BigDecimal?) {
+        try {
+            val prefs = getEncryptedPrefs()
+            val editor = prefs.edit().putString(cachedEthBalanceField, ethAmount.toPlainString())
+            if (ethPriceUsd != null) {
+                editor.putString(cachedUsdPriceField, ethPriceUsd.toPlainString())
+            } else {
+                editor.remove(cachedUsdPriceField)
+            }
+            editor.apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save cached balance", e)
+        }
+    }
+
+    /** Retrieve cached balance if network is offline or unavailable. */
+    fun getCachedBalance(): Pair<BigDecimal, BigDecimal?>? {
+        return try {
+            val prefs = getEncryptedPrefs()
+            val ethStr = prefs.getString(cachedEthBalanceField, null) ?: return null
+            val ethAmount = BigDecimal(ethStr)
+            val usdStr = prefs.getString(cachedUsdPriceField, null)
+            val usdPrice = usdStr?.let { BigDecimal(it) }
+            Pair(ethAmount, usdPrice)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read cached balance", e)
+            null
+        }
     }
 }

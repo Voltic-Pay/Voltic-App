@@ -194,7 +194,7 @@ fun ConfirmPaymentScreen(
                                     } catch (e: Exception) {
                                         Log.e("ConfirmPayment", "Payment failed", e)
                                         val displayMsg = ArbitrumClient.formatError(e)
-                                        sendResult = "Payment Failed: $displayMsg"
+                                        sendResult = "Payment Failed: $displayMsg (Network offline? Tap merchant's phone via NFC to pay offline.)"
                                     } finally {
                                         isSending = false
                                     }

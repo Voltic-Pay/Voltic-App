@@ -14,7 +14,8 @@ fun SettingsMenuContent(
     onShowSeed: () -> Unit,
     onSwitchWallet: () -> Unit,
     onNavigateToLimits: () -> Unit,
-    onCloseDrawer: () -> Unit
+    onCloseDrawer: () -> Unit,
+    isOffline: Boolean = false
 ) {
     ModalDrawerSheet(
         modifier = Modifier.fillMaxHeight().width(300.dp),
@@ -52,22 +53,24 @@ fun SettingsMenuContent(
                 modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
             )
 
-            NavigationDrawerItem(
-                label = { Text("Spending Limits", fontWeight = FontWeight.Medium) },
-                selected = false,
-                icon = { 
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_money_off), // Temporary icon
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp)
-                    ) 
-                },
-                onClick = {
-                    onCloseDrawer()
-                    onNavigateToLimits()
-                },
-                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-            )
+            if (!isOffline) {
+                NavigationDrawerItem(
+                    label = { Text("Spending Limits", fontWeight = FontWeight.Medium) },
+                    selected = false,
+                    icon = { 
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_money_off), // Temporary icon
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        ) 
+                    },
+                    onClick = {
+                        onCloseDrawer()
+                        onNavigateToLimits()
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+            }
 
             NavigationDrawerItem(
                 label = { Text("Switch Wallet", fontWeight = FontWeight.Medium) },

@@ -19,8 +19,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import java.nio.channels.UnresolvedAddressException
 
 class ArbitrumClient {
 
@@ -96,9 +99,14 @@ class ArbitrumClient {
                 val cause = e.cause
                 val isKnownFlaky = cause is ConnectException ||
                         cause is SocketTimeoutException ||
+                        cause is UnresolvedAddressException ||
+                        cause is UnknownHostException ||
+                        cause is IOException ||
+                        e is IOException ||
                         e.message?.contains("521") == true ||
                         e.message?.contains("429") == true ||
-                        e.message?.contains("sync status") == true
+                        e.message?.contains("sync status") == true ||
+                        e.message?.contains("call failed") == true
 
                 if (isKnownFlaky) {
                     Log.w("ArbitrumClient", "RPC failed ($url): ${e.message}, trying next")

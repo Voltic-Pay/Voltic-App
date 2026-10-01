@@ -25,7 +25,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -83,6 +85,7 @@ import com.voltic.app.wallet.WalletManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 
 enum class DashboardAction { NONE, SEND_MANUAL }
@@ -111,6 +114,7 @@ fun DashboardScreen(
     var isBalanceVisible by remember { mutableStateOf(!walletManager.isBalanceHidden()) }
     val ethPriceUsd by EthPriceCache.priceUsd.collectAsStateWithLifecycle()
     var activeAction by remember { mutableStateOf(DashboardAction.NONE) }
+    var isOffline by remember { mutableStateOf(false) }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val pullToRefreshState = rememberPullToRefreshState()
@@ -128,19 +132,38 @@ fun DashboardScreen(
             isRefreshing = true
 
             try {
-                val balanceDeferred = async(Dispatchers.IO) { chain.getBalance(walletAddress) }
-                val historyDeferred = async(Dispatchers.IO) { explorer.getNormalTransactions(walletAddress) }
-                val priceDeferred = async(Dispatchers.IO) { explorer.getEthPrice() }
+                supervisorScope {
+                    val balanceDeferred = async(Dispatchers.IO) { chain.getBalance(walletAddress) }
+                    val historyDeferred = async(Dispatchers.IO) { explorer.getNormalTransactions(walletAddress) }
+                    val priceDeferred = async(Dispatchers.IO) { explorer.getEthPrice() }
 
-                val weiBigInt = balanceDeferred.await()
-                val history = historyDeferred.await()
-                val price = priceDeferred.await()
+                    val weiBigInt = balanceDeferred.await()
+                    val history = historyDeferred.await()
+                    val price = priceDeferred.await()
 
-                val ethDecimal = weiBigInt.toBigDecimal().scaleByPowerOfTen(-18)
-                balanceState = BalanceUiState.Success(ethDecimal, price)
-                transactions = history
-            } catch (_: Exception) {
-                if (balanceState !is BalanceUiState.Success) balanceState = BalanceUiState.Error("Network error")
+                    val ethDecimal = weiBigInt.toBigDecimal().scaleByPowerOfTen(-18)
+                    balanceState = BalanceUiState.Success(ethDecimal, price)
+                    transactions = history
+                    isOffline = false
+
+                    walletManager.saveCachedBalance(ethDecimal, price)
+                }
+
+                try {
+                    currentLimitInfo = chain.getSpendLimitInfo(walletAddress)
+                } catch (e: Exception) {
+                    Log.w("DashboardScreen", "Failed to fetch spend limit info: ${e.message}")
+                }
+            } catch (e: Throwable) {
+                Log.w("DashboardScreen", "Refresh failed due to network error", e)
+                isOffline = true
+
+                val cached = walletManager.getCachedBalance()
+                if (cached != null) {
+                    balanceState = BalanceUiState.Success(cached.first, cached.second)
+                } else if (balanceState !is BalanceUiState.Success) {
+                    balanceState = BalanceUiState.Error("No internet connection")
+                }
             } finally {
                 isInitialLoading = false
                 isRefreshing = false
@@ -153,7 +176,6 @@ fun DashboardScreen(
         if (wallet != null) {
             address = wallet.address.toString()
             refreshData(wallet.address.toString(), showSkeleton = true)
-            currentLimitInfo = chain.getSpendLimitInfo(wallet.address.toString())
         } else {
             balanceState = BalanceUiState.Error("No active wallet found")
             isInitialLoading = false
@@ -168,7 +190,8 @@ fun DashboardScreen(
                 onShowSeed = onNavigateToBackupSeed,
                 onSwitchWallet = onSwitchWallet,
                 onNavigateToLimits = onNavigateToLimits,
-                onCloseDrawer = { scope.launch { drawerState.close() } }
+                onCloseDrawer = { scope.launch { drawerState.close() } },
+                isOffline = isOffline
             )
         }
     ) {
@@ -200,13 +223,15 @@ fun DashboardScreen(
                         scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                     ),
                     actions = {
-                        IconButton(onClick = onNavigateToHistory) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_history),
-                                contentDescription = "History",
-                                modifier = Modifier.size(28.dp),
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
+                        if (!isOffline) {
+                            IconButton(onClick = onNavigateToHistory) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_history),
+                                    contentDescription = "History",
+                                    modifier = Modifier.size(28.dp),
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
                 )
@@ -225,8 +250,14 @@ fun DashboardScreen(
                         .imePadding()
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.Start
-                    //removed the vertiacal spacing
                 ) {
+                    if (isOffline) {
+                        OfflineBanner(
+                            onRetry = { address?.let { refreshData(it, showSkeleton = true) } }
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
                     // 1. HERO BALANCE SECTION
                     if (isInitialLoading) {
                         BalanceSkeleton()
@@ -235,14 +266,17 @@ fun DashboardScreen(
                             label = "Wallet Balance",
                             state = balanceState,
                             isVisible = isBalanceVisible,
+                            isOffline = isOffline,
                             onToggleVisibility = {
                                 isBalanceVisible = !isBalanceVisible
                                 walletManager.setBalanceHidden(!isBalanceVisible)
                             }
                         )
-                        SpendLimitUsageCard(
-                            limitInfo =currentLimitInfo ,
-                        )
+                        if (!isOffline) {
+                            SpendLimitUsageCard(
+                                limitInfo = currentLimitInfo,
+                            )
+                        }
                         address?.let { currentAddr ->
                             Spacer(modifier = Modifier.height(16.dp))
                             Surface(
@@ -277,174 +311,176 @@ fun DashboardScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    if (!isOffline) {
+                        Spacer(modifier = Modifier.height(24.dp))
 
-                    // 2. QUICK ACTION GRID
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        ActionButton(
-                            label = "Send",
-                            icon = painterResource(id = R.drawable.ic_send),
-                            isSelected = activeAction == DashboardAction.SEND_MANUAL,
-                            showDropdown = true,
-                            onClick = {
-                                activeAction = if (activeAction == DashboardAction.SEND_MANUAL) {
-                                    DashboardAction.NONE
-                                } else {
-                                    DashboardAction.SEND_MANUAL
-                                }
-                            }
-                        )
-
-                        ActionButton(
-                            label = "Receive",
-                            icon = painterResource(id = R.drawable.ic_receive),
-                            isSelected = false,
-                            onClick = onNavigateToGenerateQr
-                        )
-                    }
-
-                    // 3. SEND TRANSACTION PANEL
-                    AnimatedVisibility(
-                        visible = activeAction == DashboardAction.SEND_MANUAL,
-                        enter = fadeIn(tween(180)) +
-                                expandVertically(
-                                    animationSpec = spring(dampingRatio = 0.86f, stiffness = 380f),
-                                    expandFrom = Alignment.Top
-                                ),
-                        exit = fadeOut(tween(140)) +
-                                shrinkVertically(
-                                    animationSpec = spring(dampingRatio = 0.9f, stiffness = 420f),
-                                    shrinkTowards = Alignment.Top
-                                )
-                    ) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 16.dp),
-                            shape = RoundedCornerShape(32.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        // 2. QUICK ACTION GRID
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                verticalArrangement = Arrangement.spacedBy(20.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text("Send ETH", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-
-                                    Surface(
-                                        onClick = onNavigateToScanQr,
-                                        modifier = Modifier.size(width = 80.dp, height = 56.dp),
-                                        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 24.dp, bottomEnd = 12.dp, bottomStart = 12.dp),
-                                        color = MaterialTheme.colorScheme.primary
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                painter = painterResource(id = R.drawable.ic_scan),
-                                                contentDescription = "Scan QR",
-                                                modifier = Modifier.size(28.dp),
-                                                tint = MaterialTheme.colorScheme.onPrimary
-                                            )
-                                        }
+                            ActionButton(
+                                label = "Send",
+                                icon = painterResource(id = R.drawable.ic_send),
+                                isSelected = activeAction == DashboardAction.SEND_MANUAL,
+                                showDropdown = true,
+                                onClick = {
+                                    activeAction = if (activeAction == DashboardAction.SEND_MANUAL) {
+                                        DashboardAction.NONE
+                                    } else {
+                                        DashboardAction.SEND_MANUAL
                                     }
                                 }
+                            )
 
-                                AmountInputField(
-                                    value = amountInput,
-                                    onValueChange = { newValue ->
-                                        amountInput = AmountInputSanitizer.sanitizeCryptoAmount(input = newValue, fallback = amountInput)
-                                        sendTxResult = null
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    ethPriceUsd = ethPriceUsd
-                                )
+                            ActionButton(
+                                label = "Receive",
+                                icon = painterResource(id = R.drawable.ic_receive),
+                                isSelected = false,
+                                onClick = onNavigateToGenerateQr
+                            )
+                        }
 
-                                OutlinedTextField(
-                                    value = recipientInput,
-                                    onValueChange = { recipientInput = it; sendTxResult = null },
-                                    label = { Text("Recipient Address or ENS") },
-                                    placeholder = { Text("0x... or name.eth") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(16.dp)
-                                )
+                        // 3. SEND TRANSACTION PANEL
+                        AnimatedVisibility(
+                            visible = activeAction == DashboardAction.SEND_MANUAL,
+                            enter = fadeIn(tween(180)) +
+                                    expandVertically(
+                                        animationSpec = spring(dampingRatio = 0.86f, stiffness = 380f),
+                                        expandFrom = Alignment.Top
+                                    ),
+                            exit = fadeOut(tween(140)) +
+                                    shrinkVertically(
+                                        animationSpec = spring(dampingRatio = 0.9f, stiffness = 420f),
+                                        shrinkTowards = Alignment.Top
+                                    )
+                        ) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 16.dp),
+                                shape = RoundedCornerShape(32.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(24.dp),
+                                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("Send ETH", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
-                                Button(
-                                    onClick = {
-                                        scope.launch {
-                                            isSendingTx = true
-                                            sendTxResult = null
-                                            try {
-                                                if (!AmountInputSanitizer.isGreaterThanZero(amountInput)) {
-                                                    throw IllegalArgumentException("Please enter an amount more than 0")
-                                                }
-                                                val wallet = walletManager.loadExistingWalletAsync()
-                                                    ?: throw IllegalStateException("No active wallet loaded")
-                                                val txHash = withContext(Dispatchers.IO) {
-                                                    chain.sendEth(wallet, recipientInput.trim(), amountInput.trim())
-                                                }
-                                                sendTxResult = "Success! Tx: $txHash"
-                                                address?.let { refreshData(it) }
-                                            } catch (e: Exception) {
-                                                Log.e("DashboardScreen", "Send ETH failed", e)
-                                                sendTxResult = "Send Failed: ${e.message}"
-                                            } finally {
-                                                isSendingTx = false
+                                        Surface(
+                                            onClick = onNavigateToScanQr,
+                                            modifier = Modifier.size(width = 80.dp, height = 56.dp),
+                                            shape = RoundedCornerShape(topStart = 12.dp, topEnd = 24.dp, bottomEnd = 12.dp, bottomStart = 12.dp),
+                                            color = MaterialTheme.colorScheme.primary
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.ic_scan),
+                                                    contentDescription = "Scan QR",
+                                                    modifier = Modifier.size(28.dp),
+                                                    tint = MaterialTheme.colorScheme.onPrimary
+                                                )
                                             }
                                         }
-                                    },
-                                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(16.dp),
-                                    enabled = !isSendingTx && recipientInput.isNotBlank() && amountInput.isNotBlank()
-                                ) {
-                                    if (isSendingTx) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(24.dp),
-                                            color = MaterialTheme.colorScheme.onPrimary,
-                                            strokeWidth = 3.dp
-                                        )
-                                    } else {
-                                        Text("Confirm & Send", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     }
+
+                                    AmountInputField(
+                                        value = amountInput,
+                                        onValueChange = { newValue ->
+                                            amountInput = AmountInputSanitizer.sanitizeCryptoAmount(input = newValue, fallback = amountInput)
+                                            sendTxResult = null
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        ethPriceUsd = ethPriceUsd
+                                    )
+
+                                    OutlinedTextField(
+                                        value = recipientInput,
+                                        onValueChange = { recipientInput = it; sendTxResult = null },
+                                        label = { Text("Recipient Address or ENS") },
+                                        placeholder = { Text("0x... or name.eth") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+
+                                    Button(
+                                        onClick = {
+                                            scope.launch {
+                                                isSendingTx = true
+                                                sendTxResult = null
+                                                try {
+                                                    if (!AmountInputSanitizer.isGreaterThanZero(amountInput)) {
+                                                        throw IllegalArgumentException("Please enter an amount more than 0")
+                                                    }
+                                                    val wallet = walletManager.loadExistingWalletAsync()
+                                                        ?: throw IllegalStateException("No active wallet loaded")
+                                                    val txHash = withContext(Dispatchers.IO) {
+                                                        chain.sendEth(wallet, recipientInput.trim(), amountInput.trim())
+                                                    }
+                                                    sendTxResult = "Success! Tx: $txHash"
+                                                    address?.let { refreshData(it) }
+                                                } catch (e: Exception) {
+                                                    Log.e("DashboardScreen", "Send ETH failed", e)
+                                                    sendTxResult = "Send Failed: ${e.message}"
+                                                } finally {
+                                                    isSendingTx = false
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                                        shape = RoundedCornerShape(16.dp),
+                                        enabled = !isSendingTx && recipientInput.isNotBlank() && amountInput.isNotBlank()
+                                    ) {
+                                        if (isSendingTx) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(24.dp),
+                                                color = MaterialTheme.colorScheme.onPrimary,
+                                                strokeWidth = 3.dp
+                                            )
+                                        } else {
+                                            Text("Confirm & Send", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                    sendTxResult?.let { StatusBanner(message = it) }
                                 }
-                                sendTxResult?.let { StatusBanner(message = it) }
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    // 4. RECENT ACTIVITY
-                    Text("Recent Activity", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(12.dp))
+                        // 4. RECENT ACTIVITY
+                        Text("Recent Activity", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                    if (isInitialLoading) {
-                        repeat(5) { TransactionSkeletonItem() }
-                    } else if (transactions.isEmpty()) {
-                        OutlinedCard(modifier = Modifier.fillMaxWidth().height(100.dp), shape = RoundedCornerShape(24.dp)) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("No recent transactions found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (isInitialLoading) {
+                            repeat(5) { TransactionSkeletonItem() }
+                        } else if (transactions.isEmpty()) {
+                            OutlinedCard(modifier = Modifier.fillMaxWidth().height(100.dp), shape = RoundedCornerShape(24.dp)) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("No recent transactions found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
-                        }
-                    } else {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                        ) {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                transactions.take(4).forEachIndexed { index, tx ->
-                                    TransactionItem(transaction = tx, currentAddress = address ?: "")
-                                    if (index != 3 && index != transactions.size - 1) {
-                                        HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp))
+                        } else {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(24.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    transactions.take(4).forEachIndexed { index, tx ->
+                                        TransactionItem(transaction = tx, currentAddress = address ?: "")
+                                        if (index != 3 && index != transactions.size - 1) {
+                                            HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp))
+                                        }
                                     }
                                 }
                             }
@@ -458,10 +494,28 @@ fun DashboardScreen(
 }
 
 @Composable
-fun BalanceCard(label: String, state: BalanceUiState, isVisible: Boolean, onToggleVisibility: () -> Unit) {
+fun BalanceCard(
+    label: String,
+    state: BalanceUiState,
+    isVisible: Boolean,
+    isOffline: Boolean = false,
+    onToggleVisibility: () -> Unit
+) {
+    var showInfoNote by remember { mutableStateOf(false) }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
             Column(modifier = Modifier.weight(0.95f)) {
                 when (state) {
                     is BalanceUiState.Success -> {
@@ -472,20 +526,63 @@ fun BalanceCard(label: String, state: BalanceUiState, isVisible: Boolean, onTogg
                     else -> Text("...")
                 }
             }
-            if (isVisible) {
-                IconButton(onClick = onToggleVisibility) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_hide),
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp)
-                    )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (isOffline) {
+                    IconButton(onClick = { showInfoNote = !showInfoNote }) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_info),
+                            contentDescription = "Cached balance info",
+                            tint = if (showInfoNote) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
-            } else {
-                FilledTonalIconButton(onClick = onToggleVisibility) {
+                if (isVisible) {
+                    IconButton(onClick = onToggleVisibility) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_hide),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                } else {
+                    FilledTonalIconButton(onClick = onToggleVisibility) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_show),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(visible = isOffline && showInfoNote) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_show),
+                        painter = painterResource(id = R.drawable.ic_info),
                         contentDescription = null,
-                        modifier = Modifier.size(24.dp)
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Shown balance is from last update time and may have changed if you use multiple apps on the same wallet.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -521,5 +618,67 @@ private fun ActionButton(label: String, icon: Painter, isSelected: Boolean, show
             }
         }
         Text(text = label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun OfflineBanner(
+    onRetry: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_cloud_off),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.size(24.dp)
+                )
+                Text(
+                    text = "No Network Connection",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
+            Text(
+                text = "Showing cached balance. You can still send ETH via NFC if you have enough balance — tap the receiver device.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Button(
+                    onClick = onRetry,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.tertiaryContainer
+                    )
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_refresh),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Try to connect", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }
