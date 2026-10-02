@@ -11,7 +11,7 @@ Voltic is a modern, privacy-first P2P self custodial payment application designe
 *   **KYC-Free:** We believe in financial privacy. No intrusive "Know Your Customer" procedures required.
 *   **Tap-to-Pay Simplicity:** The power of the blockchain with the convenience of a modern wallet. Just tap your phone against a merchant or scan a QR code.
 *   **Focused Usability:** Unlike other wallets that clutter the UI with 100 coins across 10 different networks, Voltic chooses one robust network to ensure the best possible user experience.
-*   **full self custody** No one can control your accout but YOU ,Send anywhere anytime you want to Anyone around the world .
+*   **full self custody** No one can control your account but YOU ,Send anywhere anytime you want to Anyone around the world .
 
 ## Features
 
@@ -25,7 +25,7 @@ Voltic is a modern, privacy-first P2P self custodial payment application designe
 ## Getting Started
 
 [Download Voltic](https://github.com/Voltic-Pay/Voltic-App/releases) install it ,create a wallet
-you can use any swap sites like uniswap to fund you wallet with EHT ,make sure you ETH is on Arbitrum network 
+you can use any swap sites like uniswap to fund you wallet with Ethereum,make sure you ETH is on Arbitrum network 
 then you can open the app and you will see your funds
 
 **If you have existing self custodial wallet** you can use the same seed phrase to use the same balance -spending limits apply from voltic only-
@@ -33,15 +33,15 @@ then you can open the app and you will see your funds
 ### for testnets 
 get to releases download apk it will inform you that it could be unsafe click install anyway
 create a wallet save the seed phrase 
-go to https://github.com/Voltic-Pay/Voltic-App/edit or other etherum faucent networks get some eth set you account public adresss -copy it from app dashboard-
-go to meta mask install it click resote a wallet put the seed phrase
+go to https://github.com/Voltic-Pay/Voltic-App/edit or other Etherum faucent networks get some eth set you account public address -copy it from app dashboard-
+go to meta mask install it click restore a wallet put the seed phrase
 go to https://portal.arbitrum.io/bridge connect your metamask then bride to eth arbitrum 
 **this is only for testnet**
 
 
 ### Prerequisites
 
-*   Android Studio Ladybug (or newer)
+*   Android Quali4 (or newer)
 *   JDK 17+
 *   An Android device with NFC support (for Tap-to-Pay testing)
 
@@ -49,7 +49,7 @@ go to https://portal.arbitrum.io/bridge connect your metamask then bride to eth 
 
 1.  **Clone the Repository**
     ```bash
-    git clone https://github.com/voltic-pay/voltic.git
+    git clone https://github.com/voltic-pay/voltic-app.git
     cd voltic
     ```
 
