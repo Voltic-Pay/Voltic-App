@@ -72,12 +72,12 @@ class ArbitrumClient {
         fun isNetworkError(e: Throwable): Boolean {
             val cause = e.cause
             val msg = e.message ?: ""
-            return cause is ConnectException ||
-                    cause is SocketTimeoutException ||
-                    cause is UnresolvedAddressException ||
-                    cause is UnknownHostException ||
-                    cause is IOException ||
-                    e is IOException ||
+            return (cause is ConnectException) ||
+                    (cause is SocketTimeoutException) ||
+                    (cause is UnresolvedAddressException) ||
+                    (cause is UnknownHostException) ||
+                    (cause is IOException) ||
+                    (e is IOException) ||
                     httpCodeRegex.containsMatchIn(msg) ||
                     msg.contains("sync status") ||
                     msg.contains("call failed") ||
@@ -90,7 +90,7 @@ class ArbitrumClient {
     private suspend fun <T> runWithFallback(
         rpcs: List<String>,
         indexPointer: kotlin.reflect.KMutableProperty0<Int>,
-        block: suspend (Provider) -> T
+        block: suspend (Provider) -> T,
     ): T = withContext(Dispatchers.IO) {
         var lastException: Exception? = null
         val startIndex = indexLock.withLock { indexPointer.get() }
@@ -129,7 +129,7 @@ class ArbitrumClient {
         val vaultNonce: BigInteger,
         val eoaNonce: BigInteger,
         val gasPrice: BigInteger,
-        val gasLimit: BigInteger
+        val gasLimit: BigInteger,
     )
 
     // ==========================================
@@ -141,7 +141,7 @@ class ArbitrumClient {
         to: Address,
         value: BigInteger,
         data: Bytes? = null,
-        fallback: Long
+        fallback: Long,
     ): Long {
         return try {
             val call = CallRequest().also {
@@ -175,6 +175,10 @@ class ArbitrumClient {
         provider.getBalance(Address(address), BlockId.LATEST).sendAwait().unwrap()
     }
 
+    /** Same as [getBalance] but as a plain java.math.BigInteger (wei), handy for UI comparisons. */
+    suspend fun getBalanceWei(address: String): java.math.BigInteger =
+        java.math.BigInteger(getBalance(address).toString())
+
     suspend fun getVaultBalance(address: String): BigInteger = runArb { provider ->
         val vault = VolticSmartWallet(provider, VAULT_ADDRESS_TYPED)
         vault.balanceOf(Address(address)).call(BlockId.LATEST).sendAwait().unwrap()
@@ -196,7 +200,7 @@ class ArbitrumClient {
     suspend fun getOfflinePaymentParams(
         customerAddress: String,
         toAddress: String,
-        amountEth: String
+        amountEth: String,
     ): OfflinePaymentParams = runArb { provider ->
         val vaultNonce = getVaultNonce(customerAddress)
         val eoaNonce = provider.getTransactionCount(Address(customerAddress), BlockId.PENDING).sendAwait().unwrap()
@@ -212,7 +216,7 @@ class ArbitrumClient {
             to = Address(resolvedTo),
             value = amountWei,
             data = null,
-            fallback = 21_000L
+            fallback = 21_000L,
         )
 
         OfflinePaymentParams(vaultNonce, BigInteger.valueOf(eoaNonce), gasPrice, BigInteger.valueOf(gasLimit))
@@ -232,7 +236,7 @@ class ArbitrumClient {
         amountEth: String,
         nonce: BigInteger,
         deadline: BigInteger,
-        signatureHex: String
+        signatureHex: String,
     ): String = runArb { provider ->
         txMutex.withLock {
             val amountWei = EthUnit.ETHER.toWei(amountEth).toBigInteger()
@@ -346,7 +350,7 @@ class ArbitrumClient {
     suspend fun sendEth(
         wallet: Signer,
         toAddress: String,
-        amountEth: String
+        amountEth: String,
     ): String = runArb { provider ->
         txMutex.withLock {
             val resolvedAddress = getReceiverAddress(toAddress)
@@ -369,14 +373,18 @@ class ArbitrumClient {
             val signedTx = wallet.signTransaction(rawTransaction)
 
             val pending = provider.sendRawTransaction(signedTx).sendAwait().unwrap()
-            pending.hash.toString()
+            // Wait for inclusion so "sent" really means done (Arbitrum is sub-second),
+            // and so a reverted transfer is reported instead of showing a false success.
+            val receipt = pending.inclusion().unwrap()
+            require(receipt.isSuccessful) { "Transaction reverted" }
+            receipt.transactionHash.toString()
         }
     }
 
     suspend fun executeVaultPayment(
         wallet: Signer,
         toAddress: String,
-        amountEth: String
+        amountEth: String,
     ): String = withContext(Dispatchers.IO) {
         val resolvedTo = getReceiverAddress(toAddress)
         val ownerAddress = wallet.address.toString()
@@ -408,7 +416,7 @@ class ArbitrumClient {
         to: String,
         amountEth: String,
         nonce: BigInteger,
-        deadline: BigInteger
+        deadline: BigInteger,
     ): String {
         val amountWei = EthUnit.ETHER.toWei(amountEth).toBigInteger()
 
@@ -455,7 +463,7 @@ class ArbitrumClient {
         amountEth: String,
         nonce: BigInteger,
         gasPriceWei: BigInteger,
-        gasLimit: BigInteger
+        gasLimit: BigInteger,
     ): ByteArray {
         val amountWei = EthUnit.ETHER.toWei(amountEth).toBigInteger()
         val rawTransaction = TxLegacy(

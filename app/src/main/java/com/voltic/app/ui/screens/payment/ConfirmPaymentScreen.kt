@@ -11,22 +11,25 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.painterResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voltic.app.R
 import com.voltic.app.chain.ArbitrumClient
+import com.voltic.app.chain.explorer.EthPriceCache
 import com.voltic.app.payload.PaymentRequest
+import com.voltic.app.settings.SpendLimitPreferences
 import com.voltic.app.transport.nfc.NfcSession
+import com.voltic.app.ui.components.AmountInputField
 import com.voltic.app.ui.components.StatusBanner
+import com.voltic.app.ui.model.AmountInputSanitizer
+import com.voltic.app.ui.model.BalanceFormatter
 import com.voltic.app.wallet.WalletManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.voltic.app.chain.explorer.EthPriceCache
-import com.voltic.app.settings.SpendLimitPreferences
-import com.voltic.app.ui.components.AmountInputField
+import java.math.RoundingMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,7 +37,7 @@ fun ConfirmPaymentScreen(
     walletManager: WalletManager,
     paymentRequest: PaymentRequest,
     onPaymentSuccess: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
 ) {
     val ethPriceUsd by EthPriceCache.priceUsd.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -45,10 +48,54 @@ fun ConfirmPaymentScreen(
     var isSending by remember { mutableStateOf(false) }
     var sendResult by remember { mutableStateOf<String?>(null) }
     var useVault by remember(spendLimitsEnabled) { mutableStateOf(spendLimitsEnabled) }
+    var sentTxHash by remember { mutableStateOf<String?>(null) }
+
+    // NFC sender side: after the user authorizes, the 2nd tap makes the HCE service sign and
+    // clear the session. When the session disappears after we authorized, the payment is
+    // handed to the merchant (who broadcasts it), so we can show the success screen.
+    val nfcPending by NfcSession.pendingRequest.collectAsStateWithLifecycle()
+    var nfcAuthorized by remember { mutableStateOf(false) }
+    var nfcHandedOff by remember { mutableStateOf(false) }
+    LaunchedEffect(nfcPending) {
+        if (nfcAuthorized && (nfcPending == null)) {
+            nfcHandedOff = true
+        }
+    }
 
     val finalAmount = paymentRequest.amountEth ?: customAmountInput.trim()
+    val finalAmountDecimal = finalAmount.toBigDecimalOrNull()
+    val formattedEthText = finalAmountDecimal?.let { BalanceFormatter.formatCrypto(it) } ?: if (finalAmount.isNotBlank()) "$finalAmount ETH" else null
+    val usdEquivalentText = if (finalAmountDecimal != null && ethPriceUsd != null) {
+        "≈ $${finalAmountDecimal.multiply(ethPriceUsd).setScale(2, RoundingMode.HALF_UP)}"
+    } else null
+
     val isSuccess = sendResult?.startsWith("Success", ignoreCase = true) == true ||
             sendResult?.startsWith("Authorized", ignoreCase = true) == true
+
+    val sentHash = sentTxHash
+    if (sentHash != null) {
+        TransactionSentScreen(
+            title = "Transaction sent!",
+            amountText = formattedEthText,
+            usdText = usdEquivalentText,
+            detail = "To ${shortenHex(paymentRequest.to)}",
+            footnote = "Tx ${shortenHex(sentHash)}",
+            onDone = onPaymentSuccess,
+        )
+        return
+    }
+
+    if (nfcHandedOff) {
+        TransactionSentScreen(
+            title = "Payment sent!",
+            amountText = formattedEthText,
+            usdText = usdEquivalentText,
+            detail = "To ${shortenHex(paymentRequest.to)}",
+            footnote = "Signed and handed to the merchant's phone, which broadcasts it.",
+            onDone = onPaymentSuccess,
+        )
+        return
+    }
 
     Scaffold(
         topBar = {
@@ -74,7 +121,7 @@ fun ConfirmPaymentScreen(
             Text(
                 text = "Review Payment Details",
                 style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.ExtraBold
+                fontWeight = FontWeight.ExtraBold,
             )
 
             ElevatedCard(
@@ -100,10 +147,37 @@ fun ConfirmPaymentScreen(
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                    if (paymentRequest.amountEth != null) {
+                    val reqAmount = paymentRequest.amountEth
+                    if (reqAmount != null) {
                         Column {
                             Text("Amount to Send", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("${paymentRequest.amountEth} ETH", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                verticalAlignment = Alignment.Bottom,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                val parsed = reqAmount.toBigDecimalOrNull()
+                                val formattedCrypto = parsed?.let { BalanceFormatter.formatCrypto(it) } ?: "$reqAmount ETH"
+                                val usdVal = if (parsed != null && ethPriceUsd != null) {
+                                    "≈ $${parsed.multiply(ethPriceUsd).setScale(2, RoundingMode.HALF_UP)}"
+                                } else null
+
+                                Text(
+                                    text = formattedCrypto,
+                                    style = MaterialTheme.typography.displaySmall,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                usdVal?.let { usd ->
+                                    Text(
+                                        text = usd,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Normal,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(bottom = 4.dp),
+                                    )
+                                }
+                            }
                         }
                     } else {
                         Column {
@@ -111,7 +185,7 @@ fun ConfirmPaymentScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             AmountInputField(
                                 value = customAmountInput,
-                                onValueChange = { customAmountInput = it },
+                                onValueChange = { customAmountInput = AmountInputSanitizer.sanitizeCryptoAmount(it, customAmountInput) },
                                 modifier = Modifier.fillMaxWidth(),
                                 enabled = !isSending && sendResult == null,
                                 ethPriceUsd = ethPriceUsd
@@ -137,7 +211,7 @@ fun ConfirmPaymentScreen(
             }
 
             sendResult?.let { result ->
-                StatusBanner(message = result)
+                StatusBanner(message = result, isSuccess = isSuccess)
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -175,6 +249,7 @@ fun ConfirmPaymentScreen(
                                 NfcSession.updateAmount(finalAmount)
                                 NfcSession.useVault = useVault
                                 NfcSession.authorize()
+                                nfcAuthorized = true
                                 sendResult = "Authorized! Tap Merchant's phone again to send."
                             } else {
                                 scope.launch {
@@ -191,6 +266,7 @@ fun ConfirmPaymentScreen(
                                             }
                                         }
                                         sendResult = "Success! Tx: $txHash"
+                                        sentTxHash = txHash
                                     } catch (e: Exception) {
                                         if (e is kotlin.coroutines.cancellation.CancellationException) throw e
                                         Log.e("ConfirmPayment", "Payment failed", e)
@@ -221,3 +297,6 @@ fun ConfirmPaymentScreen(
         }
     }
 }
+
+private fun shortenHex(value: String): String =
+    if (value.length > 14) "${value.take(6)}…${value.takeLast(4)}" else value
