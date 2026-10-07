@@ -18,8 +18,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voltic.app.R
 import com.voltic.app.chain.ArbitrumClient
 import com.voltic.app.chain.explorer.EthPriceCache
+import com.voltic.app.payload.NFCPaymentRequest
 import com.voltic.app.payload.PaymentRequest
 import com.voltic.app.settings.SpendLimitPreferences
+import com.voltic.app.transport.nfc.HandoffKind
 import com.voltic.app.transport.nfc.NfcSession
 import com.voltic.app.ui.components.AmountInputField
 import com.voltic.app.ui.components.StatusBanner
@@ -27,9 +29,13 @@ import com.voltic.app.ui.model.AmountInputSanitizer
 import com.voltic.app.ui.model.BalanceFormatter
 import com.voltic.app.wallet.WalletManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.math.RoundingMode
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,15 +56,49 @@ fun ConfirmPaymentScreen(
     var useVault by remember(spendLimitsEnabled) { mutableStateOf(spendLimitsEnabled) }
     var sentTxHash by remember { mutableStateOf<String?>(null) }
 
-    // NFC sender side: after the user authorizes, the 2nd tap makes the HCE service sign and
-    // clear the session. When the session disappears after we authorized, the payment is
-    // handed to the merchant (who broadcasts it), so we can show the success screen.
-    val nfcPending by NfcSession.pendingRequest.collectAsStateWithLifecycle()
-    var nfcAuthorized by remember { mutableStateOf(false) }
-    var nfcHandedOff by remember { mutableStateOf(false) }
-    LaunchedEffect(nfcPending) {
-        if (nfcAuthorized && (nfcPending == null)) {
-            nfcHandedOff = true
+    // NFC sender side. After the user authorizes, the 2nd tap makes the HCE service sign and hand
+    // the signed payload to the merchant's phone, which is the one that broadcasts it. So
+    // "handed over" is NOT "paid": we only call it sent once the nonce we signed with has been
+    // consumed on-chain. (The session disappearing only means *we* produced a response, it
+    // doesn't prove the merchant's phone received it.)
+    val handoff by NfcSession.handoff.collectAsStateWithLifecycle()
+    var handoffConfirmed by remember { mutableStateOf(false) }
+    var handoffExpired by remember { mutableStateOf(false) }
+
+    LaunchedEffect(handoff) {
+        val h = handoff ?: return@LaunchedEffect
+        handoffConfirmed = false
+        handoffExpired = false
+        while (isActive) {
+            try {
+                val current = when (h.kind) {
+                    HandoffKind.EOA -> chain.getAccountNonce(h.signerAddress)
+                    HandoffKind.VAULT -> chain.getVaultNonceLong(h.signerAddress)
+                }
+                if (current > h.signedNonce) {
+                    handoffConfirmed = true
+                    break
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                // offline / transient RPC error: keep waiting, that's the whole point of NFC pay
+            }
+            val expiresAt = h.expiresAtSec
+            if (expiresAt != null && (System.currentTimeMillis() / 1000) > expiresAt) {
+                handoffExpired = true
+                break
+            }
+            delay(3.seconds)
+        }
+    }
+
+    // Leaving without a signed handoff must also drop an already-authorized NFC session, otherwise
+    // the next reader that taps this phone could still get a signature out of it.
+    DisposableEffect(Unit) {
+        onDispose {
+            if (paymentRequest is NFCPaymentRequest && NfcSession.handoff.value == null) {
+                NfcSession.clear()
+            }
         }
     }
 
@@ -85,13 +125,28 @@ fun ConfirmPaymentScreen(
         return
     }
 
-    if (nfcHandedOff) {
+    val handedOff = handoff
+    if (handedOff != null) {
+        val style = when {
+            handoffConfirmed -> SentScreenStyle.Success
+            handoffExpired -> SentScreenStyle.Failed
+            else -> SentScreenStyle.Pending
+        }
         TransactionSentScreen(
-            title = "Payment sent!",
+            style = style,
+            title = when (style) {
+                SentScreenStyle.Success -> "Payment sent!"
+                SentScreenStyle.Failed -> "Payment not completed"
+                SentScreenStyle.Pending -> "Waiting for merchant"
+            },
             amountText = formattedEthText,
             usdText = usdEquivalentText,
             detail = "To ${shortenHex(paymentRequest.to)}",
-            footnote = "Signed and handed to the merchant's phone, which broadcasts it.",
+            footnote = when (style) {
+                SentScreenStyle.Success -> "Confirmed on-chain."
+                SentScreenStyle.Failed -> "It expired before the merchant broadcast it. Nothing was spent."
+                SentScreenStyle.Pending -> "Signed and handed to the merchant's phone. It isn't paid until they broadcast it, this updates when it lands on-chain."
+            },
             onDone = onPaymentSuccess,
         )
         return
@@ -222,7 +277,7 @@ fun ConfirmPaymentScreen(
                     modifier = Modifier.fillMaxWidth().height(64.dp),
                     shape = RoundedCornerShape(32.dp)
                 ) {
-                    Text(if (paymentRequest is com.voltic.app.payload.NFCPaymentRequest) "Ready (Return to Dashboard)" else "Done", style = MaterialTheme.typography.labelLarge)
+                    Text(if (paymentRequest is NFCPaymentRequest) "Ready (Return to Dashboard)" else "Done", style = MaterialTheme.typography.labelLarge)
                 }
             } else {
                 Row(
@@ -245,11 +300,10 @@ fun ConfirmPaymentScreen(
                                 return@Button
                             }
 
-                            if (paymentRequest is com.voltic.app.payload.NFCPaymentRequest) {
+                            if (paymentRequest is NFCPaymentRequest) {
                                 NfcSession.updateAmount(finalAmount)
                                 NfcSession.useVault = useVault
                                 NfcSession.authorize()
-                                nfcAuthorized = true
                                 sendResult = "Authorized! Tap Merchant's phone again to send."
                             } else {
                                 scope.launch {

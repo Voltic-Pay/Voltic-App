@@ -189,6 +189,14 @@ class ArbitrumClient {
         vault.nonces(Address(address)).call(BlockId.LATEST).sendAwait().unwrap()
     }
 
+    /** The account's confirmed transaction count (what a signed legacy tx's nonce must exceed). */
+    suspend fun getAccountNonce(address: String): Long = runArb { provider ->
+        provider.getTransactionCount(Address(address), BlockId.LATEST).sendAwait().unwrap()
+    }
+
+    /** [getVaultNonce] as a plain Long; nonces are tiny, and this sidesteps the BigInteger flavours. */
+    suspend fun getVaultNonceLong(address: String): Long = getVaultNonce(address).toString().toLong()
+
     // Delegates to the standalone EnsResolver (same package, not yet touched by this
     // migration) — it pulls config.ethereumRpcs itself and throws EnsResolutionException
     // on any failure (invalid name, no resolver, unregistered). Callers further up

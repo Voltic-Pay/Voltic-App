@@ -97,6 +97,9 @@ class VolticHceService : HostApduService() {
                 )
 
                 NfcSession.clear()
+                NfcSession.markHandedOff(
+                    Handoff(HandoffKind.VAULT, wallet.address.toString(), vaultNonce.toLong(), deadline.toLong())
+                )
                 awaitingSecondTap = false
 
                 val vaultPayload = "VAULT|$signatureHex|$vaultNonce|$deadline|${request.amountEth ?: "0"}"
@@ -109,6 +112,9 @@ class VolticHceService : HostApduService() {
             )
 
             NfcSession.clear()
+            NfcSession.markHandedOff(
+                Handoff(HandoffKind.EOA, wallet.address.toString(), eoaNonce.toLong(), null)
+            )
             awaitingSecondTap = false
 
             Log.i(TAG, "Signing Complete. Sending back signed transaction.")

@@ -32,7 +32,9 @@ sealed class ReaderState {
     ) : ReaderState()
 
     object Broadcasting : ReaderState()
-    data class Success(val txHash: String) : ReaderState()
+    // amountEth is what the payer's signed payload actually says, when we can read it
+    // (vault path). null = unknown (legacy raw tx), callers fall back to the requested amount.
+    data class Success(val txHash: String, val amountEth: String? = null) : ReaderState()
     data class Error(val message: String) : ReaderState()
 }
 
@@ -132,7 +134,7 @@ class NfcReaderManager(
                                     deadline = deadline,
                                     signatureHex = signatureHex
                                 )
-                                updateState(ReaderState.Success(txHash))
+                                updateState(ReaderState.Success(txHash, amountEthFromPeer))
                             } catch (e: Exception) {
                                 Log.e(TAG, "Vault broadcast failed", e)
                                 updateState(ReaderState.Error("Broadcast failed: ${ArbitrumClient.formatError(e)}"))

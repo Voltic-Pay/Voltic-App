@@ -43,7 +43,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-private data class ReceivedPayment(val amountEth: String?, val txHash: String?)
+private data class ReceivedPayment(val amountEth: String?, val txHash: String?, val from: String?)
 
 private fun parseEthToWei(input: String): BigInteger? = try {
     val trimmed = input.trim()
@@ -78,12 +78,23 @@ fun GenerateReceiveScreen(
     val chain = remember { ArbitrumClient() }
     var received by remember { mutableStateOf<ReceivedPayment?>(null) }
     val latestAmountInput by rememberUpdatedState(amountInput)
+    var payerAddress by remember { mutableStateOf<String?>(null) }
 
-    // NFC path: this phone broadcasts the transaction itself, so we already know it landed.
+    // NFC path: this phone broadcasts the transaction itself, so we already know it landed, and
+    // tap 1 told us who the payer is.
     LaunchedEffect(readerState) {
-        val state = readerState
-        if ((state is ReaderState.Success) && (received == null)) {
-            received = ReceivedPayment(amountEth = amountInput.ifBlank { null }, txHash = state.txHash)
+        when (val state = readerState) {
+            is ReaderState.ProcessingTap1 -> payerAddress = state.address
+            is ReaderState.WaitingForTap2 -> payerAddress = state.customerAddress
+            is ReaderState.Success -> if (received == null) {
+                received = ReceivedPayment(
+                    // prefer what the payer's signed payload says over what we asked for
+                    amountEth = state.amountEth ?: amountInput.ifBlank { null },
+                    txHash = state.txHash,
+                    from = payerAddress,
+                )
+            }
+            else -> Unit
         }
     }
 
@@ -106,6 +117,7 @@ fun GenerateReceiveScreen(
                         received = ReceivedPayment(
                             amountEth = BigDecimal(delta).movePointLeft(18).stripTrailingZeros().toPlainString(),
                             txHash = null,
+                            from = null, // QR / manual: the payer broadcasts, we can't tell who it was
                         )
                     } else if (balance < base) {
                         baseline = balance // we spent something meanwhile; re-baseline
@@ -179,7 +191,7 @@ fun GenerateReceiveScreen(
             title = "Payment received!",
             amountText = formattedCrypto,
             usdText = usdEquivalent,
-            detail = "${currentAddress.take(6)}...${currentAddress.takeLast(4)}",
+            detail = payment.from?.let { "From ${it.take(6)}...${it.takeLast(4)}" } ?: "Added to your balance",
             footnote = payment.txHash?.let { "Tx ${it.take(8)}…${it.takeLast(6)}" },
             onDone = onBack,
         )
