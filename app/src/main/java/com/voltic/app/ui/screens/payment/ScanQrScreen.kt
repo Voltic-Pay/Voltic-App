@@ -51,8 +51,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.voltic.app.R
+import com.voltic.app.chain.ChainConfig
 import com.voltic.app.payload.QRPaymentRequest
 import com.voltic.app.transport.qr.QrReader
+import com.voltic.app.ui.components.PaymentErrorDialog
 import java.util.concurrent.Executors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,6 +70,8 @@ fun ScanQrScreen(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         )
     }
+
+    var errorDialogData by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -100,18 +104,20 @@ fun ScanQrScreen(
             if (hasCameraPermission) {
                 CameraPreviewScanner(
                     onQrScanned = { rawText ->
+                        if (errorDialogData != null) return@CameraPreviewScanner
+
                         try {
                             val request = QRPaymentRequest.parse(rawText)
 
                             if (request.chainId != expectedChainId) {
-                                Toast.makeText(context, "Wrong Network! Chain ID: ${request.chainId}", Toast.LENGTH_LONG).show()
+                                errorDialogData = "Wrong Network" to "This payment request is for Chain ID ${request.chainId}, but Voltic is configured for ${ChainConfig.current.chainName} (${expectedChainId}).\n\nPlease switch networks or scan an Arbitrum payment QR code."
                                 return@CameraPreviewScanner
                             }
 
                             onPaymentScanned(request)
                         } catch (e: Exception) {
                             Log.e("ScanQrScreen", "QR Parse failed", e)
-                            Toast.makeText(context, "Invalid QR: ${e.message}", Toast.LENGTH_SHORT).show()
+                            errorDialogData = "Invalid Payment QR" to (e.message ?: "The scanned QR code is not a valid Ethereum payment request.")
                         }
                     }
                 )
@@ -150,6 +156,14 @@ fun ScanQrScreen(
                         Text("Grant Permission", style = MaterialTheme.typography.titleMedium)
                     }
                 }
+            }
+
+            errorDialogData?.let { (title, message) ->
+                PaymentErrorDialog(
+                    title = title,
+                    message = message,
+                    onDismiss = { errorDialogData = null }
+                )
             }
         }
     }

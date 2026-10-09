@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -22,9 +23,11 @@ import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.voltic.app.chain.ChainConfig
 import com.voltic.app.payload.PaymentRequest
 import com.voltic.app.payload.QRPaymentRequest
 import com.voltic.app.transport.nfc.NfcSession
+import com.voltic.app.ui.components.PaymentErrorDialog
 import com.voltic.app.ui.navigation.Screen
 import com.voltic.app.ui.screens.settings.BackupSeedScreen
 import com.voltic.app.ui.screens.payment.ConfirmPaymentScreen
@@ -98,9 +101,11 @@ fun VolticApp(
             return@VolticTheme
         }
 
+        val context = LocalContext.current
         val startDestination = if (hasWallet == true) Screen.Dashboard.route else Screen.Welcome.route
 
         var pendingPaymentRequest by remember { mutableStateOf<PaymentRequest?>(null) }
+        var deepLinkErrorData by remember { mutableStateOf<Pair<String, String>?>(null) }
 
         // Wrap the entire navigation in a Surface to provide a consistent background color
         // This prevents the "white flash" during transitions in dark mode.
@@ -112,12 +117,18 @@ fun VolticApp(
             LaunchedEffect(deepLinkUri) {
                 if (!deepLinkUri.isNullOrBlank()) {
                     try {
-                        pendingPaymentRequest = QRPaymentRequest.parse(deepLinkUri)
-                        navController.navigate(Screen.ConfirmPayment.route)
-                    } catch (_: Exception) {
-                        // TODO:Invalid link
+                        val parsedRequest = QRPaymentRequest.parse(deepLinkUri)
+                        if (parsedRequest.chainId != ChainConfig.current.chainId) {
+                            deepLinkErrorData = "Wrong Network" to "This external payment request is for Chain ID ${parsedRequest.chainId}, but Voltic is currently operating on ${ChainConfig.current.chainName} (${ChainConfig.current.chainId}).\n\nPlease switch networks or scan a compatible payment QR code."
+                        } else {
+                            pendingPaymentRequest = parsedRequest
+                            navController.navigate(Screen.ConfirmPayment.route)
+                        }
+                    } catch (e: Exception) {
+                        deepLinkErrorData = "Invalid Payment Link" to (e.message ?: "The deep link URL is not a valid Ethereum payment request.")
                     }
                 }
+
             }
 
             // Case 2: NFC service pushed a request
@@ -264,6 +275,12 @@ fun VolticApp(
                 }
 
                 composable(Screen.ConfirmPayment.route) {
+                    deepLinkErrorData?.let { (title, message) ->
+                        PaymentErrorDialog(
+                            title = title,
+                            message = message,
+                            onDismiss = { deepLinkErrorData = null }
+                        )
                     pendingPaymentRequest?.let { request ->
                         ConfirmPaymentScreen(
                             walletManager = walletManager,
