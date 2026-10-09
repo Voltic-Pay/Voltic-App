@@ -38,12 +38,19 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <!-- Listens for https://voltic-pay.github.io/pay and it will not work for now until the domain is properly configured -->
-                <!-- maybe later i will do it -->
+                <!-- Listens for https://voltic-pay.github.io/ethereum: -->
                 <data
                     android:scheme="https"
                     android:host="voltic-pay.github.io"
-                    android:pathPrefix="/pay" />
+                    android:pathPrefix="/ethereum:" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <!-- ERC-681 standard transaction request scheme -->
+                <data android:scheme="ethereum" />
             </intent-filter>
 
 
