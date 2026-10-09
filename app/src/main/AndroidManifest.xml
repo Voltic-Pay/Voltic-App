@@ -38,11 +38,11 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <!-- Listens for https://voltic-pay.github.io/pay -->
+                <!-- Listens for https://voltic-pay.github.io/ethereum: -->
                 <data
                     android:scheme="https"
                     android:host="voltic-pay.github.io"
-                    android:pathPrefix="/pay" />
+                    android:pathPrefix="/ethereum:" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

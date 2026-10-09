@@ -15,7 +15,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -101,7 +100,6 @@ fun VolticApp(
             return@VolticTheme
         }
 
-        val context = LocalContext.current
         val startDestination = if (hasWallet == true) Screen.Dashboard.route else Screen.Welcome.route
 
         var pendingPaymentRequest by remember { mutableStateOf<PaymentRequest?>(null) }
@@ -275,12 +273,6 @@ fun VolticApp(
                 }
 
                 composable(Screen.ConfirmPayment.route) {
-                    deepLinkErrorData?.let { (title, message) ->
-                        PaymentErrorDialog(
-                            title = title,
-                            message = message,
-                            onDismiss = { deepLinkErrorData = null }
-                        )
                     pendingPaymentRequest?.let { request ->
                         ConfirmPaymentScreen(
                             walletManager = walletManager,
@@ -299,6 +291,13 @@ fun VolticApp(
                         )
                     }
                 }
+            }
+            deepLinkErrorData?.let { (title, message) ->
+                PaymentErrorDialog(
+                    title = title,
+                    message = message,
+                    onDismiss = { deepLinkErrorData = null }
+                )
             }
         }
     }

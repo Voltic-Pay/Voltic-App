@@ -10,7 +10,7 @@ class QRPaymentRequestTest {
     private val testAddress = "0x1234567890123456789012345678901234567890"
 
     @Test
-    fun `toUri creates valid ERC-681 URI with amount and chainId`() {
+    fun `toUri wraps ERC-681 in the Voltic domain with amount and chainId`() {
         val request = QRPaymentRequest(
             to = testAddress,
             amountEth = "0.01",
@@ -18,11 +18,11 @@ class QRPaymentRequestTest {
         )
 
         val uri = request.toUri()
-        assertEquals("ethereum:$testAddress@421614?value=0.01e18", uri)
+        assertEquals("https://voltic-pay.github.io/ethereum:$testAddress@421614?value=0.01e18", uri)
     }
 
     @Test
-    fun `toUri creates valid ERC-681 URI without amount`() {
+    fun `toUri wraps ERC-681 in the Voltic domain without amount`() {
         val request = QRPaymentRequest(
             to = testAddress,
             amountEth = null,
@@ -30,7 +30,25 @@ class QRPaymentRequestTest {
         )
 
         val uri = request.toUri()
-        assertEquals("ethereum:$testAddress@421614", uri)
+        assertEquals("https://voltic-pay.github.io/ethereum:$testAddress@421614", uri)
+    }
+
+    @Test
+    fun `parse reads its own toUri output`() {
+        val original = QRPaymentRequest(to = testAddress, amountEth = "0.01", chainId = 421614L)
+        val parsed = QRPaymentRequest.parse(original.toUri())
+
+        assertEquals(original, parsed)
+    }
+
+    @Test
+    fun `parse parses Voltic https wrapper`() {
+        val raw = "https://voltic-pay.github.io/ethereum:$testAddress@421614?value=1e16"
+        val parsed = QRPaymentRequest.parse(raw)
+
+        assertEquals(testAddress, parsed.to)
+        assertEquals("0.01", parsed.amountEth)
+        assertEquals(421614L, parsed.chainId)
     }
 
     @Test
@@ -87,16 +105,6 @@ class QRPaymentRequestTest {
     }
 
     @Test
-    fun `parse parses legacy Voltic deep link`() {
-        val raw = "https://voltic-pay.github.io/pay?to=$testAddress&amount=0.01&chainId=421614"
-        val parsed = QRPaymentRequest.parse(raw)
-
-        assertEquals(testAddress, parsed.to)
-        assertEquals("0.01", parsed.amountEth)
-        assertEquals(421614L, parsed.chainId)
-    }
-
-    @Test
     fun `parse parses bare Ethereum address`() {
         val parsed = QRPaymentRequest.parse(testAddress)
 
@@ -117,5 +125,10 @@ class QRPaymentRequestTest {
     @Test(expected = IllegalArgumentException::class)
     fun `parse throws for invalid string`() {
         QRPaymentRequest.parse("invalid_content_here")
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `parse throws for old Voltic link format`() {
+        QRPaymentRequest.parse("https://voltic-pay.github.io/pay?to=$testAddress&amount=0.01&chainId=421614")
     }
 }

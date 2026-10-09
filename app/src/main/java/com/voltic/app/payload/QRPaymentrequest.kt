@@ -4,7 +4,6 @@ import com.voltic.app.chain.ChainConfig
 import io.github.adraffy.ens.ENSNormalize
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.net.URI
 import java.net.URLDecoder
 
 data class QRPaymentRequest(
@@ -17,9 +16,11 @@ data class QRPaymentRequest(
      * Converts request to an ERC-681 standard transaction request URI:
      * ethereum:0x123...[@421614][?value=0.01e18] see : https://eips.ethereum.org/EIPS/eip-681
      * for more info
+     * NOTE : no longer supporting it because simply after doing everything discovered it is kind of dead. cool idea though..
+     * now i am using kinda semi eip-681
      */
     fun toUri(): String {
-        val builder = StringBuilder("ethereum:").append(to)
+        val builder = StringBuilder(HTTPS_BASE).append("ethereum:").append(to)
 
         if (chainId > 0) {
             builder.append("@").append(chainId)
@@ -33,21 +34,28 @@ data class QRPaymentRequest(
     }
 
     companion object {
+        private const val HTTPS_BASE = "https://voltic-pay.github.io/"
         private val WEI_IN_ETH = BigDecimal("1000000000000000000")
         private val ETH_ADDRESS_REGEX = Regex("^0x[0-9a-fA-F]{40}$")
 
         /**
-         * Parses transaction request URLs adhering to ERC-681 standard (e.g. ethereum:0x...@1?value=1e18),
-         * legacy Voltic deep links (https://voltic-pay.github.io/pay?to=...&amount=...&chainId=...),
-         * or bare Ethereum addresses / ENS names.
+         * Parses:
+         *  - ERC-681 URIs: ethereum:0x...@42161?value=1e16 (and ethereum:pay-0x...)
+         *  - the same URI wrapped in the Voltic domain: https://voltic-pay.github.io/ethereum:0x...
+         *  - bare Ethereum addresses / ENS names
          */
         fun parse(
             rawText: String,
             defaultChainId: Long = ChainConfig.current.chainId
         ): QRPaymentRequest {
-            val text = rawText.trim()
+            var text = rawText.trim()
             if (text.isEmpty()) {
                 throw IllegalArgumentException("QR code content is empty")
+            }
+
+            // Voltic https wrapper -> plain ERC-681 URI
+            if (text.startsWith(HTTPS_BASE, ignoreCase = true)) {
+                text = text.substring(HTTPS_BASE.length)
             }
 
             // ERC-681 URL format
@@ -55,12 +63,7 @@ data class QRPaymentRequest(
                 return parseErc681(text, defaultChainId)
             }
 
-            // Legacy Voltic URL format
-            if (text.startsWith("https://voltic-pay.github.io/pay", ignoreCase = true)) {
-                return parseLegacyVolticUrl(text, defaultChainId)
-            }
-
-            // 3. Fallback: Bare Ethereum address or ENS name
+            // Fallback: Bare Ethereum address or ENS name
             if (ETH_ADDRESS_REGEX.matches(text) || isValidEnsName(text)) {
                 return QRPaymentRequest(
                     to = text,
@@ -155,43 +158,6 @@ data class QRPaymentRequest(
                 to = recipient,
                 amountEth = amountEth,
                 chainId = finalChainId
-            )
-        }
-
-        private fun parseLegacyVolticUrl(text: String, defaultChainId: Long): QRPaymentRequest {
-            val queryMap = mutableMapOf<String, String>()
-            try {
-                val uri = URI(text)
-                uri.rawQuery?.split("&")?.forEach { param ->
-                    val parts = param.split("=", limit = 2)
-                    if (parts.isNotEmpty()) {
-                        val key = decode(parts[0])
-                        val value = if (parts.size > 1) decode(parts[1]) else ""
-                        queryMap[key] = value
-                    }
-                }
-            } catch (_: Exception) {
-                throw IllegalArgumentException("Invalid Voltic payment URL format")
-            }
-
-            val to = queryMap["to"].orEmpty().trim()
-            val chainIdStr = queryMap["chainId"]
-
-            if (!ETH_ADDRESS_REGEX.matches(to) && !isValidEnsName(to)) {
-                throw IllegalArgumentException("Invalid recipient Ethereum address")
-            }
-
-            val chainId = chainIdStr?.toLongOrNull() ?: defaultChainId
-            if (chainId <= 0) {
-                throw IllegalArgumentException("Invalid or missing chain ID")
-            }
-
-            val amountEth = queryMap["amount"]?.ifBlank { null }
-
-            return QRPaymentRequest(
-                to = to,
-                amountEth = amountEth,
-                chainId = chainId
             )
         }
 
